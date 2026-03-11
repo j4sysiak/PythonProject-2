@@ -1,6 +1,10 @@
 from turtle import Turtle
 
 class Scoreboard(Turtle):
+
+    # Dziedziczenie (super().__init__()):
+    # Klasy Food i Scoreboard dziedziczą po Turtle.
+    # Dzięki temu mają dostęp do wszystkich metod żółwia (jak goto, color, write), ale dodajemy im też własne funkcjonalności.
     def __init__(self):
         super().__init__()
         self.score = 0
