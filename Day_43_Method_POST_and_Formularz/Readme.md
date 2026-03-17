@@ -162,14 +162,14 @@ Zauważ, że nie robimy już tras typu `/Berlin`.
 Cała logika siedzi pod jednym głównym adresem. 
 Kod sam decyduje, co zrobić, na podstawie tego, czy użytkownik tylko prosi o stronę (GET), czy też wysyła dane formularza (POST).
 
-Instrukcje warunkowe w HTML ({% if %}): 
+Instrukcje warunkowe w HTML ({% if %}):    `{% if city_name %} / {% endif %}`  i  `{% if error %} / {% endif %}`
 To sprawia, że Twój interfejs jest dynamiczny. 
 Kafelek z pogodą "nie istnieje" w kodzie HTML, dopóki Python nie przekaże mu danych z API.
 
 Przetestuj to:
+--------------
 
 Zrób na wszelki wypadek twardy restart serwera (Czerwony kwadrat -> Play).
-
 Wejdź na http://127.0.0.1:5000/. Zobaczysz tylko pole wyszukiwania.
 
 Wpisz "Krakow" i wciśnij Szukaj.
@@ -177,7 +177,8 @@ Ułamek sekundy później strona się przeładuje i pod spodem wyskoczy piękny 
 
 Wpisz "Bzdura123" – dostaniesz ładny, czerwony komunikat o błędzie na stronie, a nie w konsoli.
 
-Działa? Jeśli tak, to wjechałeś w świat pełnoprawnych aplikacji webowych (tzw. Full-Stack).
+Działa? 
+Jeśli tak, to wjechałeś w świat pełnoprawnych aplikacji webowych (tzw. Full-Stack).
 Możesz przyjąć dane, przetworzyć je i oddać wynik na tej samej stronie.
 
 Jak klikniesz i to ruszy, to zabieramy się za to, co odróżnia zabawki od systemów komercyjnych – Bazy Danych (SQLAlchemy). 
