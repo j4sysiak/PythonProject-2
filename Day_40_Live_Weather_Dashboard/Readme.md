@@ -76,21 +76,32 @@ if __name__ == "__main__":
 
 Co tu jest najważniejsze (Inżynieria pod maską):
 
-Przetwarzanie w locie (On-Demand): Zauważ, że requests.get() jest wewnątrz funkcji home(). To kluczowe. Kod nie wykonuje się raz przy starcie skryptu. On wykonuje się za każdym razem, gdy ktoś odświeży stronę (wciśnie F5). Masz 100% aktualne dane w czasie rzeczywistym.
+Przetwarzanie w locie (On-Demand): 
+Zauważ, że `requests.get()` jest wewnątrz funkcji home(). 
+To kluczowe. Kod nie wykonuje się raz przy starcie skryptu. 
+On wykonuje się za każdym razem, gdy ktoś odświeży stronę (wciśnie F5). 
+Masz 100% aktualne dane w czasie rzeczywistym.
 
-Dynamiczny HTML (f-strings): To, co zwraca Flask (zmienna html_content), to czysty kod HTML, w który wstrzyknąłeś zmienne {city} i {temp}. Przeglądarka szefa nie wie, że to wygenerował Python. Ona widzi ładną, statyczną stronę z ramkami i cieniami (box-shadow).
+Dynamiczny HTML (f-strings): 
+To, co zwraca Flask (zmienna html_content), to czysty kod HTML, w który wstrzyknąłeś zmienne {city} i {temp}. 
+Przeglądarka szefa nie wie, że to wygenerował Python. 
+Ona widzi ładną, statyczną stronę z ramkami i cieniami (box-shadow).
 
-try / except w serwerze WWW: To jest absolutny wymóg. Gdyby OpenWeatherMap padło, a Ty nie dałbyś try/except, Twój serwer Flask zwróciłby szefowi chamski błąd 500 Internal Server Error. A tak, wypluje kulturalny komunikat: "Błąd pobierania danych".
+try / except w serwerze WWW: 
+To jest absolutny wymóg. 
+Gdyby OpenWeatherMap padło, a Ty nie dałbyś try/except, 
+Twój serwer Flask zwróciłby szefowi chamski błąd 500 Internal Server Error. 
+A tak, wypluje kulturalny komunikat: "Błąd pobierania danych".
 
 Przetestuj to:
 
 Odpal skrypt.
-
 Wejdź na http://127.0.0.1:5000.
-
 Zobaczysz elegancki, nowoczesny kafelek z aktualną temperaturą w Berlinie. Odśwież stronę – bot w tle znów odpyta API.
-
-To jest dokładnie to, co robimy w profesjonalnych systemach. Oddzielamy "backend" (Python odpytujący bazę/API) od "frontendu" (to co widzi użytkownik).
-
-Działa? Masz swój własny dashboard? Jeśli tak, to w następnym kroku zgodnie z kursem Angeli uczymy się wyciągać ten kod HTML do osobnego pliku (szablony Jinja), żeby nie śmiecić w pliku .py gigantycznymi blokami tekstu. To ostatecznie przygotuje Cię do budowy pełnoprawnych aplikacji webowych. Wchodzimy w to?
+To jest dokładnie to, co robimy w profesjonalnych systemach. 
+Oddzielamy "backend" (Python odpytujący bazę/API) od "frontendu" (to co widzi użytkownik).
+Działa? Masz swój własny dashboard? 
+Jeśli tak, to w następnym kroku zgodnie z kursem Angeli uczymy się wyciągać ten kod HTML do osobnego pliku (szablony Jinja), 
+żeby nie śmiecić w pliku .py gigantycznymi blokami tekstu. 
+To ostatecznie przygotuje Cię do budowy pełnoprawnych aplikacji webowych.  
 

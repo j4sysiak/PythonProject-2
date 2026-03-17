@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Firmowy</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 50px;">
+    <h1 style="color: #333;">Live Dashboard Firmowy</h1>
+
+    <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 300px;">
+        <!-- Tu wpadną zmienne z Pythona -->
+        <h2 style="color: #0056b3;">📍 {{ city_name }}</h2>
+        <p style="font-size: 24px; margin: 5px 0;">🌡️ Temperatura: <strong>{{ temperature }} °C</strong></p>
+        <p style="font-size: 18px; color: #666;">☁️ Warunki: {{ weather_desc }}</p>
+    </div>
+</body>
+</html>

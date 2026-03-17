@@ -25,7 +25,26 @@ def home():
 
         # 2. Wyciągamy mięso z JSON-a
         temp = data["main"]["temp"]
+        # wyciągamy do zmiennej temp wartość temperatury z odpowiedzi JSON zwróconej przez API OpenWeatherMap.
+        # {
+        #     "main": {
+        #         "temp": 22.5,
+        #         "humidity": 60,
+        #         "pressure": 1013
+        #     },
+
         description = data["weather"][0]["description"].capitalize()
+        # wyciągamy opis warunków pogodowych z odpowiedzi JSON API OpenWeatherMap
+        # {
+        #     "weather": [
+        #         {
+        #             "description": "clear sky",
+        #             "main": "Clear",
+        #             "icon": "01d"
+        #         }
+        #     ]
+        # }
+
         city = data["name"]
 
         # 3. Flask generuje stronę HTML z wstrzykniętymi danymi (f-string)
