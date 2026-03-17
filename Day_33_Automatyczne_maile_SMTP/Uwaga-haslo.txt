@@ -1,0 +1,3 @@
+password = "?????????????" # haslo do skrzynki mailowej, z której będą wysyłane maile.
+                       haslo trzymam lokalnie w pliku tekstowym, żeby nie umieszczać go bezpośrednio w kodzie.
+                       haslo jest w KeyPass:  pod nazwa: PythonProject-2

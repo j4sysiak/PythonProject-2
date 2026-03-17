@@ -31,7 +31,7 @@ for hour_data in weather_data["list"][:12]:
 if will_rain:
     with smtplib.SMTP("smtp.gmail.com", port=587) as connection:
         connection.starttls()
-        connection.login(user="j4sysiak@gmail.com", password="jtiztfzhnxytcivw")
+        connection.login(user="j4sysiak@gmail.com", password="??????????????????????")
         connection.sendmail(
             from_addr="j4sysiak@gmail.com",
             to_addrs="j4sysiak@gmail.com",

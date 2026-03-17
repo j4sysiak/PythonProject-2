@@ -14,7 +14,7 @@ bo zwykłe hasło do logowania nie zadziała ze względów bezpieczeństwa.
 import smtplib
 
 my_email = "j4sysiak@gmail.com"
-password = "jtiztfzhnxytcivw" # Nie zwykłe hasło!
+password = "???????????????" # Nie zwykłe hasło!
 
 # 1. Łączymy się z serwerem SMTP Gmaila
 with smtplib.SMTP("smtp.gmail.com", port=587) as connection:
