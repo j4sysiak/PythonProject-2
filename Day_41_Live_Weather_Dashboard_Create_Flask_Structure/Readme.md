@@ -1,8 +1,8 @@
 Dzień 41
 --------
 
-Day_41_Live_Weather_Dashboard_Dynamic_Route
--------------------------------------------
+Day_41_Live_Weather_Dashboard_Create_Flask_Structure
+----------------------------------------------------
 
 Wchodzimy na poziom profesjonalny. 
 Wrzucanie kodu HTML prosto do pliku Pythona (tak jak zrobiliśmy to przed chwilą w Day_40) to tzw. "hardcoding". 
