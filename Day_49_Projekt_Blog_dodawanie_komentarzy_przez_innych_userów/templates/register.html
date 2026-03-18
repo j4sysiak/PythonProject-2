@@ -1,0 +1,12 @@
+<a href="/">Wróć do strony głównej</a>
+<h1>Rejestracja</h1>
+<form method="POST">
+    <input type="text" name="username" placeholder="Wybierz login" required><br><br>
+    <input type="password" name="password" placeholder="Wybierz hasło" required><br><br>
+    <button type="submit">Zarejestruj się</button>
+</form>
+
+<!-- Wyświetlanie błędów (np. gdy login jest zajęty) -->
+{% with messages = get_flashed_messages() %}
+  {% if messages %} <p style="color:red;"><b>{{ messages[0] }}</b></p> {% endif %}
+{% endwith %}

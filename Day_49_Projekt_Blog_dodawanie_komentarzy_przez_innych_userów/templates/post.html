@@ -1,0 +1,33 @@
+<a href="/">Wróć do strony głównej</a>
+<hr>
+
+<!-- 1. TREŚĆ POSTA -->
+<h1>{{ post.title }}</h1>
+<p style="color: gray;">Autor: {{ post.author.username }} | Data: {{ post.date }}</p>
+<p style="font-size: 18px;">{{ post.body }}</p>
+
+<hr>
+
+<!-- 2. SEKCJA KOMENTARZY -->
+<h3>Komentarze:</h3>
+<ul style="list-style-type: none; padding-left: 0;">
+    <!-- Magia SQL w Jinja: post.comments automatycznie wyciąga wszystkie komentarze przypięte do tego posta -->
+    {% for comment in post.comments %}
+        <li style="background-color: #f4f4f4; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+            <p style="margin: 0;">{{ comment.text }}</p>
+            <small style="color: gray;">Napisał: <b>{{ comment.comment_author.username }}</b></small>
+        </li>
+    {% else %}
+        <p style="color: gray;">Brak komentarzy. Bądź pierwszy!</p>
+    {% endfor %}
+</ul>
+
+<!-- 3. FORMULARZ DODAWANIA KOMENTARZA (Tylko dla zalogowanych) -->
+{% if current_user.is_authenticated %}
+    <form method="POST" style="margin-top: 20px;">
+        <textarea name="comment_text" rows="3" cols="50" placeholder="Napisz komentarz..." required></textarea><br>
+        <button type="submit" style="margin-top: 5px;">Dodaj komentarz</button>
+    </form>
+{% else %}
+    <p style="color: red;">Musisz się <a href="/login">zalogować</a>, żeby dodać komentarz.</p>
+{% endif %}
