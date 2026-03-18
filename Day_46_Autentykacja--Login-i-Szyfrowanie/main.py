@@ -29,11 +29,29 @@ class SearchHistory(db.Model):
     date = db.Column(db.String(100))
 
 
+
+# Przy każdym kolejnym żądaniu Flask-Login odczytuje user_id z sesji
+# i wywołuje właśnie tę funkcję load_user(user_id), aby załadować obiekt User z bazy danych.
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
+
+# Wyjaśnienie zaznaczonego kodu
+# Ten blok jest wywoływany od razu przy starcie aplikacji (przy importowaniu / uruchomieniu pliku main.py),
+# ponieważ jest to zwykły kod na poziomie modułu — nie jest w żadnej funkcji ani trasie.
+# Co robi krok po kroku:
+# 1. with app.app_context(): — tworzy kontekst aplikacji Flask, który jest wymagany do pracy z bazą danych poza obsługą żądań HTTP (np. przy starcie).
+# 2. db.create_all() — tworzy wszystkie tabele w bazie danych (User, SearchHistory) na podstawie zdefiniowanych modeli, jeśli jeszcze nie istnieją.
+# 3. if not User.query.filter_by(username="admin").first(): — sprawdza, czy w tabeli User istnieje już użytkownik o nazwie "admin".
+# 4. Jeśli nie istnieje — tworzy go z zahashowanym hasłem "haslo123" i zapisuje do bazy:
+# 5. generate_password_hash("haslo123") — hashuje hasło (nigdy nie zapisujemy hasła w postaci jawnej)
+# 6. db.session.add(...) + db.session.commit() — dodaje i zatwierdza rekord w bazie
+# Podsumowanie
+# To jest inicjalizacja bazy danych + seedowanie domyślnego konta admina.
+# Dzięki sprawdzeniu if not ... admin jest tworzony tylko raz — przy pierwszym uruchomieniu.
+# Przy kolejnych uruchomieniach blok po prostu pomija tworzenie, bo admin już istnieje.
 with app.app_context():
     db.create_all()
     if not User.query.filter_by(username="admin").first():
@@ -48,17 +66,23 @@ def login():
     if request.method == 'POST':
         user = User.query.filter_by(username=request.form.get("username")).first()
         if user and check_password_hash(user.password, request.form.get("password")):
+            # Gdy użytkownik się loguje poprzez ta linię: `login_user(user)`,
+            # Flask-Login tworzy dla niego sesję.
+            # Oznacza to, że Flask-Login będzie pamiętał, że ten użytkownik jest zalogowany podczas kolejnych żądań.
+            # Flask-Login zapisuje po prostu jego user_id w ciasteczku sesji w przeglądarce.
             login_user(user)
             return redirect(url_for('home'))
         flash("Złe dane logowania!")
     return render_template("login.html")
 
+# Dzięki temu w każdej trasie oznaczonej @login_required, Flask-Login wie, kto jest zalogowany.
 @app.route("/logout")
 @login_required
 def logout():
     logout_user() # Ta funkcja z Flask-Login niszczy ciasteczko sesji w przeglądarce
     return redirect(url_for('login')) # Wyrzucamy usera z powrotem do ekranu logowania
 
+# Dzięki temu w każdej trasie oznaczonej @login_required, Flask-Login wie, kto jest zalogowany.
 @app.route("/", methods=["GET", "POST"])
 @login_required
 def home():
