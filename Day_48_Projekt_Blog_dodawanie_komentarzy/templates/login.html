@@ -1,0 +1,9 @@
+<h1>Logowanie</h1>
+<form method="POST">
+    <input type="text" name="username" placeholder="Login (admin)" required>
+    <input type="password" name="password" placeholder="Hasło (haslo123)" required>
+    <button type="submit">Zaloguj</button>
+</form>
+{% with messages = get_flashed_messages() %}
+  {% if messages %} <p style="color:red;">{{ messages[0] }}</p> {% endif %}
+{% endwith %}

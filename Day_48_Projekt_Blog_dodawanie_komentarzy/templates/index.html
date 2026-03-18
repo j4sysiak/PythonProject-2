@@ -1,0 +1,16 @@
+<h1>Mój Blog Inżynierski</h1>
+<p>
+    {% if current_user.is_authenticated %}
+        Zalogowany jako: {{ current_user.username }} | <a href="/logout">Wyloguj</a> | <a href="/new-post">Napisz nowy post</a>
+    {% else %}
+        <a href="/login">Zaloguj się</a>
+    {% endif %}
+</p>
+<hr>
+<!-- Pętla wyświetlająca posty -->
+{% for post in all_posts %}
+    <h2><a href="/post/{{ post.id }}">{{ post.title }}</a></h2>
+    <!-- Tu widać potęgę relacji w bazie! Odwołujemy się do post.author.username -->
+    <p>Napisane przez: <b>{{ post.author.username }}</b> w dniu {{ post.date }}</p>
+    <hr>
+{% endfor %}
