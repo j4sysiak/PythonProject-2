@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Pogodowy</title>
+</head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 50px;">
+
+    <h1 style="color: #333;">Wyszukiwarka Pogody</h1>
+
+    <form action="/" method="POST" style="margin-bottom: 30px;">
+        <input type="text" name="city_input" placeholder="Wpisz miasto..." required
+               style="padding: 10px; font-size: 16px; width: 200px;">
+        <button type="submit" style="padding: 10px 20px; font-size: 16px; background-color: #0056b3; color: white; border: none; cursor: pointer;">Szukaj</button>
+    </form>
+
+    {% if city_name %}
+    <div style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); width: 300px;">
+        <h2 style="color: #0056b3;">📍 {{ city_name }}</h2>
+        <p style="font-size: 24px; margin: 5px 0;">🌡️ Temperatura: <strong>{{ temperature }} °C</strong></p>
+        <p style="font-size: 18px; color: #666;">☁️ Warunki: {{ weather_desc }}</p>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div style="color: red; margin-top: 20px;">
+        <h3>Błąd: {{ error }}</h3>
+    </div>
+    {% endif %}
+
+    <!-- NOWOŚĆ: HISTORIA Z BAZY DANYCH -->
+    <div style="margin-top: 50px; background: white; padding: 20px; border-radius: 10px; width: 400px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+        <h3 style="color: #333; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Ostatnie wyszukiwania (SQL)</h3>
+        <ul style="list-style-type: none; padding: 0;">
+            <!-- Pętla for w Jinja przelatuje przez każdy obiekt z bazy -->
+            {% for item in history %}
+                <li style="padding: 5px 0; border-bottom: 1px dashed #eee;">
+                    <strong>{{ item.city }}</strong>: {{ item.temp }} °C <span style="color: #999; font-size: 12px;">({{ item.date }})</span>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+
+</body>
+</html>

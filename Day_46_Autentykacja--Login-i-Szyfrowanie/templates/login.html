@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <div style="text-align: right;">
+        <a href="/logout" style="text-decoration: none; padding: 10px; background-color: #dc3545; color: white; border-radius: 5px;">Wyloguj się</a>
+    </div>
+
+    <h2>Logowanie do Dashboardu</h2>
+    <form method="POST">
+        <input type="text" name="username" placeholder="Login" required>
+        <input type="password" name="password" placeholder="Hasło" required>
+        <button type="submit">Zaloguj</button>
+    </form>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %} {{ messages[0] }} {% endif %}
+    {% endwith %}
+</body>
+</html>
