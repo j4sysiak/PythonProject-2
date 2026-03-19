@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # --- 3. Moduły lokalne (Twoje własne pliki) ---
 from database import Base, engine, get_db
 from models import Account
-from schemas import AccountCreate, AccountResponse, TransferRequest
+from schemas import AccountCreate, AccountResponse, TransferRequest, AccountUpdate
 
 # --- LIFECYCLE: Tworzenie tabel w bazie przy starcie aplikacji ---
 # W produkcji używa się migracji (Alembic/Flyway), ale do labów wystarczy to:
@@ -50,8 +50,60 @@ async def create_account(
     return new_account
 
 
+# --- ENDPOINT: READ: Pobierz wszystkie konta ---
+@app.get("/accounts", response_model=list[AccountResponse])
+async def get_all_accounts(db: AsyncSession = Depends(get_db)):
+    # Wykonujemy zapytanie SELECT * FROM accounts
+    result = await db.execute(select(Account))
+    # scalars().all() wyciąga czyste obiekty Pythona z wyniku zapytania SQL
+    return result.scalars().all()
 
 
+# --- ENDPOINT: READ: Pobierz jedno konkretne konto ---
+@app.get("/accounts/{account_id}", response_model=AccountResponse)
+async def get_account(account_id: int, db: AsyncSession = Depends(get_db)):
+    account = await db.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Konto o podanym ID nie istnieje")
+    return account
+
+
+# --- ENDPOINT: UPDATE: Aktualizacja danych konta (tylko nazwa właściciela) ---
+@app.put("/accounts/{account_id}", response_model=AccountResponse)
+async def update_account(account_id: int, account_in: AccountUpdate, db: AsyncSession = Depends(get_db)):
+    account = await db.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Konto o podanym ID nie istnieje")
+
+    # Aktualizujemy tylko dozwolone pola
+    account.owner_name = account_in.owner_name
+
+    await db.commit()
+    await db.refresh(account)
+    return account
+
+
+# --- ENDPOINT: DELETE: Zamknięcie konta ---
+# Używamy statusu 204 (No Content) - standard REST dla udanego usunięcia
+@app.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
+    account = await db.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Konto o podanym ID nie istnieje")
+
+    # REGUŁA BIZNESOWA: Nie można usunąć konta, jeśli są na nim środki
+    if account.balance > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nie można zamknąć konta. Wypłać najpierw środki. Aktualne saldo: {account.balance}"
+        )
+
+    await db.delete(account)
+    await db.commit()
+    return None  # Przy 204 No Content nie zwracamy żadnego JSON-a
+
+
+# --- ENDPOINT: transfer money ------------
 @app.post("/transfer")
 async def transfer_money(transfer: TransferRequest, db: AsyncSession = Depends(get_db)):
     if transfer.from_account_id == transfer.to_account_id:
