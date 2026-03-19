@@ -8,9 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # --- 3. Moduły lokalne (Twoje własne pliki) ---
 from database import Base, engine, get_db
-from models import Account, TransactionHistory
+from models import Account
 from schemas import AccountCreate, AccountResponse, TransferRequest, AccountUpdate
-
 
 # --- LIFECYCLE: Tworzenie tabel w bazie przy starcie aplikacji ---
 # W produkcji używa się migracji (Alembic/Flyway), ale do labów wystarczy to:
@@ -136,14 +135,6 @@ async def transfer_money(transfer: TransferRequest, db: AsyncSession = Depends(g
         # 4. Operacja na danych (w pamięci)
         from_account.balance -= transfer.amount
         to_account.balance += transfer.amount
-
-        # Zapis historii
-        history = TransactionHistory(
-            from_account_id=transfer.from_account_id,
-            to_account_id=transfer.to_account_id,
-            amount=transfer.amount
-        )
-        db.add(history)
 
         # 5. Commit fizycznie zapisuje zmiany i ZWALNIA BLOKADY FOR UPDATE
         await db.commit()

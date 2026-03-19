@@ -210,32 +210,3 @@ Kiedy saldo spadło do 0.0, pozostałe 40 wątków uderzyło w ścianę walidacj
 Żadnych wyjątków w bazie, zero ujemnych sald.
 
 Właśnie udowodniłeś, że Twój system spełnia rygorystyczne zasady `ACID` (Atomicity, Consistency, Isolation, Durability).
-
-Co dalej? (Wybieraj Lab 4)
---------------------------
-Jako Fullstack z doświadczeniem w Springu i Angularze wiesz, że system to nie tylko przesuwanie cyferek. 
-Brakuje nam kilku kluczowych klocków. 
-W co wjeżdżamy teraz?
-
-Opcja A: Historia Transakcji (Wielowątkowy ACID)
-------------------------------------------------
-Przelew to nie tylko zmiana salda. 
-To też zapis w historii. 
-Dodamy tabelę TransactionHistory. 
-Nauczysz się, jak w SQLAlchemy w ramach jednej transakcji zmienić saldo dwóch kont ORAZ zapisać rekord historii. 
-Jeśli cokolwiek wywali błąd (np. brak prądu), baza musi wycofać (rollback) i salda, i historię.
-
-Opcja B: Połączenie z Frontendem (CORS + Angular)
--------------------------------------------------
-Skoro znasz Angulara, na pewno wiesz, co to błąd CORS (Cross-Origin Resource Sharing). 
-Skonfigurujemy FastAPI tak, żeby wpuszczał zapytania z Twojego lokalnego środowiska Angularowego (np. localhost:4200), 
-żebyś mógł dorobić do tego własny interfejs.
-
-Opcja C: Optymistyczne Blokowanie (@Version)
---------------------------------------------
-W modelu daliśmy pole version. 
-W systemach o ogromnym natężeniu ruchu blokady pesymistyczne potrafią "zamulić" bazę. 
-Pokażę Ci, jak zaimplementować blokadę optymistyczną – nie blokujemy bazy, 
-ale przy UPDATE sprawdzamy, czy wersja wiersza się nie zmieniła. Jak się zmieniła -> rzucamy błąd i każemy użytkownikowi spróbować ponownie.
-
-Co brzmi dla Ciebie najlepiej jako kolejny krok w rozbudowie tego MiniBanku? Opcja A, B czy C?
