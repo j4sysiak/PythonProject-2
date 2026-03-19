@@ -1,4 +1,4 @@
-Lab53_Projekt_MiniBank--Szkielet-Infrastruktura-Konteneryzacja
+Lab1--Projekt-Minibank--Szkielet-Infrastruktura-Konteneryzacja
 --------------------------------------------------------------
 
 Zapomnij o `Flasku` i `SQLite`. 
@@ -149,4 +149,12 @@ W Lab 2 zrobimy:
 1. konfigurację asynchronicznego połączenia z bazą (SQLAlchemy)
 2. stworzymy tabelę Account (Konta Bankowe)
 3. użyjemy Pydantic do walidacji danych wejściowych
+
+
+Dziala:
+-------
+
+Swagger wstał, to znaczy, że serwer i baza danych gadają ze sobą w wirtualnej sieci Dockera, 
+a Twój kod jest mapowany "w locie" (dzięki volumes), co oznacza, 
+że nie musisz restartować kontenerów przy zmianach w kodzie – FastAPI przeładuje się samo.
 
