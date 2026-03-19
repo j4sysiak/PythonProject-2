@@ -153,7 +153,6 @@ W Lab 2 zrobimy:
 
 Dziala:
 -------
-
 Swagger wstał, to znaczy, że serwer i baza danych gadają ze sobą w wirtualnej sieci Dockera, 
 a Twój kod jest mapowany "w locie" (dzięki volumes), co oznacza, 
 że nie musisz restartować kontenerów przy zmianach w kodzie – FastAPI przeładuje się samo.

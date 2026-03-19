@@ -76,17 +76,18 @@ Nie mają pojęcia o bazie danych.
 ```python
 # schemas.py
 from pydantic import BaseModel, Field, ConfigDict
+from decimal import Decimal
 
 # DTO dla tworzenia konta (Request)
 class AccountCreate(BaseModel):
     owner_name: str = Field(..., min_length=2, max_length=100, description="Imię i nazwisko właściciela")
-    initial_balance: float = Field(default=0.0, ge=0.0, description="Początkowy depozyt")
+    initial_balance: Decimal = Field(default=0.0, ge=0.0, description="Początkowy depozyt")
 
 # DTO dla zwracania konta (Response)
 class AccountResponse(BaseModel):
     id: int
     owner_name: str
-    balance: float
+    balance: Decimal
 
     # Pozwala Pydanticowi czytać dane bezpośrednio z obiektów SQLAlchemy
     model_config = ConfigDict(from_attributes=True)
