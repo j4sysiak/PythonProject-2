@@ -1,3 +1,6 @@
+Lab6
+----
+
 Lab6--Projekt-Minibank--Operacje-finansowe
 ------------------------------------------
 

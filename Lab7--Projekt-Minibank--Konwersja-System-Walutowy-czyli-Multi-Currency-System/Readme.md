@@ -1,3 +1,6 @@
+Lab7
+----
+
 Lab7--Projekt-Minibank--Konwersja-System-Walutowy-czyli-Multi-Currency-System
 -----------------------------------------------------------------------------
 
