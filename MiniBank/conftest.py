@@ -1,57 +1,84 @@
-import os
-import asyncio
-import asyncpg
-
-# === KROK 1: Tworzymy osobną bazę testową (minibank_test) ===
-# Dzięki temu dane z testów NIGDY nie trafią do produkcyjnej bazy "minibank"
-async def ensure_test_db():
-    conn = await asyncpg.connect(
-        host="localhost", port=5433,
-        user="bank_admin", password="superhaslo123",
-        database="minibank"  # łączymy się z istniejącą bazą, żeby móc stworzyć nową
-    )
-    exists = await conn.fetchval(
-        "SELECT 1 FROM pg_database WHERE datname = 'minibank_test'"
-    )
-    if not exists:
-        await conn.execute("CREATE DATABASE minibank_test")
-    await conn.close()
-
-asyncio.run(ensure_test_db())
-
-# === KROK 2: Kierujemy aplikację na bazę testową ===
-# MUSI być PRZED importem main/database — bo database.py czyta tę zmienną przy imporcie
-os.environ["DATABASE_URL"] = "postgresql+asyncpg://bank_admin:superhaslo123@localhost:5433/minibank_test"
-
 import pytest
+import asyncio
 from fastapi.testclient import TestClient
+from testcontainers.postgres import PostgresContainer
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
+
+import main as main_module
 from main import app
-# from database import Base, engine
+from database import get_db, Base
 
 
+# Wymagane dla asynchronicznych testów w pytest
 @pytest.fixture(scope="session")
-def client():
-    # TestClient uruchamia lifespan, który tworzy tabele i konto systemowe
-    with TestClient(app) as c:
-        yield c
+def event_loop():
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 
-# === KROK 3: Czyszczenie danych po KAŻDYM teście ===
-# autouse=True → odpala się automatycznie, nie trzeba dodawać do argumentów testu
-# Używamy bezpośrednio asyncpg (nie SQLAlchemy engine), żeby uniknąć
-# konfliktu event loopów między asyncio.run() a TestClient
-@pytest.fixture(autouse=True)
-def cleanup_after_test():
-    yield  # ← test się wykonuje
+# 1. Podnosimy kontener PostgreSQL (TYLKO DO TESTÓW)
+@pytest.fixture(scope="session")
+def db_engine():
+    print("\n[TEST SETUP] Uruchamianie Testcontainers (PostgreSQL)...")
+    with PostgresContainer("postgres:15-alpine") as postgres:
+        # Podmieniamy sterownik na asynchroniczny (asyncpg)
+        url = postgres.get_connection_url().replace("psycopg2", "asyncpg")
+        # NullPool — każda operacja tworzy nowe połączenie,
+        # dzięki czemu nie ma konfliktów między różnymi event loopami
+        engine = create_async_engine(url, poolclass=NullPool)
 
+        # Tworzymy schemat bazy wewnątrz kontenera testowego
+        async def init_db():
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+        asyncio.run(init_db())
+
+        yield engine
+    print("\n[TEST TEARDOWN] Niszczenie kontenera PostgreSQL...")
+
+
+# 2. Fabryka sesji testowych (scope=session, bo jest niezmienna)
+@pytest.fixture(scope="session")
+def test_session_factory(db_engine):
+    return async_sessionmaker(db_engine, expire_on_commit=False)
+
+
+# 3. Wstrzykiwanie zależności (Dependency Override) -> Zastępuje @MockBean
+@pytest.fixture(scope="function")
+def client(db_engine, test_session_factory):
+    # --- Podmieniamy engine i AsyncSessionLocal w module main ---
+    # Dzięki temu lifespan() łączy się z testową bazą, a nie produkcyjną (db:5432)
+    original_engine = main_module.engine
+    original_session_local = main_module.AsyncSessionLocal
+    main_module.engine = db_engine
+    main_module.AsyncSessionLocal = test_session_factory
+
+    # Podmieniamy oryginalną funkcję 'get_db' z main.py na naszą testową.
+    # Każde wywołanie tworzy NOWĄ sesję (brak współdzielenia między event loopami)
+    async def override_get_db():
+        async with test_session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    # TestClient to odpowiednik MockMvc w Springu (nie odpytuje sieci, gada prosto z kodem)
+    with TestClient(app) as test_client:
+        yield test_client
+
+    # Sprzątamy nadpisanie po teście
+    app.dependency_overrides.clear()
+    main_module.engine = original_engine
+    main_module.AsyncSessionLocal = original_session_local
+
+    # CZYSZCZENIE: Po każdym teście usuwamy wszystkie dane z tabel,
+    # żeby testy były od siebie w 100% odizolowane!
     async def cleanup():
-        conn = await asyncpg.connect(
-            host="localhost", port=5433,
-            user="bank_admin", password="superhaslo123",
-            database="minibank_test"
-        )
-        await conn.execute("DELETE FROM transactions")
-        await conn.execute("DELETE FROM accounts WHERE id != 0")
-        await conn.close()
+        async with test_session_factory() as session:
+            for table in reversed(Base.metadata.sorted_tables):
+                await session.execute(table.delete())
+            await session.commit()
 
     asyncio.run(cleanup())

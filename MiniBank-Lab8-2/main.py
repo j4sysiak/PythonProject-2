@@ -1,6 +1,5 @@
-import asyncio  # Dodaj to na samej górze
-
-# --- 1. Biblioteki wbudowane w Pythona (Standard Library) ---
+# --- 1. Biblioteki wbudowane (Standard Library) ---
+import asyncio
 from contextlib import asynccontextmanager
 from decimal import Decimal
 
@@ -11,12 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # --- 3. Moduły lokalne (Twoje własne pliki) ---
-from database import Base, engine, get_db, AsyncSessionLocal
-from models import Account, TransactionHistory
-from schemas import AccountCreate, AccountResponse, TransferRequest, AccountUpdate
-
-from database import Base
+from database import AsyncSessionLocal, Base, engine, get_db
 from exchange import get_exchange_rate
+from models import Account, TransactionHistory
+from schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest
 
 
 # --- LIFECYCLE: Tworzenie tabel w bazie przy starcie aplikacji ---
