@@ -18,7 +18,7 @@ services:
     container_name: minibank_db
     restart: always
     ports:
-      - "5432:5432"
+      - "5433:5432"  # Mapowanie 5433:5432 oznacza: port hosta : port kontenera.
     environment:
       POSTGRES_USER: bank_admin
       POSTGRES_PASSWORD: superhaslo123

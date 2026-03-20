@@ -1,73 +1,69 @@
-Opcja 1 – Testy Jednostkowe i Integracyjne (Pytest + Testcontainers)
----------------------------------------------------------------------------
+
+
+LAB 5: Opcja B – Integracja z Twoim Angularowym Frontendem (CORS)
+
+Skoro znasz Angulara, nie ma sensu budować frontu w Jinja.
+
+Dlaczego: Musisz umieć podpiąć swoje API (FastAPI) pod prawdziwy, nowoczesny frontend (Angular). To jest praca, którą wykonuje każdy Fullstack codziennie: "jak połączyć backend z tym, co widzi user?".
+
+LAB 6: Opcja E – Testy Jednostkowe i Integracyjne (Pytest + Testcontainers)
+
 W Springu masz @SpringBootTest i Testcontainers. W Pythonie musisz umieć to samo.
 
-Dlaczego: Bez testów, nikt nie wpuści Twojego kodu na serwer produkcyjny. 
-Napiszemy testy, które w locie stawiają "bazę w kontenerze", wykonują przelew i sprawdzają, czy saldo się zgadza. 
-To jest to, czego boi się większość Pythonowców, a co dla Ciebie (po Javie) będzie naturalne.
+Dlaczego: Bez testów, nikt nie wpuści Twojego kodu na serwer produkcyjny. Napiszemy testy, które w locie stawiają "bazę w kontenerze", wykonują przelew i sprawdzają, czy saldo się zgadza. To jest to, czego boi się większość Pythonowców, a co dla Ciebie (po Javie) będzie naturalne.
 
-Testy Automatyczne (Pytest)
-W Springu piszesz testy w JUnit. 
-W Pythonie rządzi pytest. 
-Napiszemy skrypt testowy, który sam postawi wirtualnego klienta, wyśle fałszywe żądania do Twojego API i sprawdzi, 
-czy statusy to 200/400. 
-Kod bez testów to tykająca bomba.
+LAB 7: Opcja N – CI/CD (GitHub Actions + Docker Hub)
+
+Na koniec zrobimy profesjonalny proces wdrożeniowy.
+
+Dlaczego: Za każdym razem, gdy zrobisz git push, GitHub Actions automatycznie uruchomi Twoje testy z LAB-a 6, zbuduje nowy obraz Dockerowy i wypchnie go na Docker Hub. To jest standard w 2026 roku.
+
+Zaczynamy teraz: LAB 4 (Historia Transakcji i ACID)
+
+Wracamy do Twojego main.py i models.py. Skoro już wiesz, jak to zrobić, zróbmy to porządnie.
+
+Twoje zadanie:
+
+Stwórz tabelę TransactionHistory (id, from_account, to_account, amount, timestamp).
+
+Zaktualizuj endpoint /transfer.
+
+Zasada: Cały proces (odjęcie środków, dodanie środków, zapis do historii) musi być w jednym bloku try...except, kończącym się db.commit() albo db.rollback().
+
+Czy wklejasz kod, czy mam Ci przygotować gotowca do wklejenia, żebyśmy przeszli do Lab 5 (Angular)? Wybierz, jak szybko chcesz to "przeskoczyć".
 
 
 
-Opcja 2 – Optymistyczne Blokowanie (@Version)
+----------------------------------
+Lab5:
+Opcja A: Historia Transakcji (Wielowątkowy ACID)
+------------------------------------------------
+Przelew to nie tylko zmiana salda. 
+To też zapis w historii. 
+Dodamy tabelę TransactionHistory. 
+Nauczysz się, jak w SQLAlchemy w ramach jednej transakcji zmienić saldo dwóch kont ORAZ zapisać rekord historii. 
+Jeśli cokolwiek wywali błąd (np. brak prądu), baza musi wycofać (rollback) i salda, i historię.
+
+
+
+Lab6:
+Opcja B: Połączenie z Frontendem (CORS + Angular)
+-------------------------------------------------
+Skoro znasz Angulara, na pewno wiesz, co to błąd CORS (Cross-Origin Resource Sharing). 
+Skonfigurujemy FastAPI tak, żeby wpuszczał zapytania z Twojego lokalnego środowiska Angularowego (np. localhost:4200), 
+żebyś mógł dorobić do tego własny interfejs.
+
+
+Lab7:
+Opcja C: Optymistyczne Blokowanie (@Version)
 --------------------------------------------
 W modelu daliśmy pole version. 
 W systemach o ogromnym natężeniu ruchu blokady pesymistyczne potrafią "zamulić" bazę. 
 Pokażę Ci, jak zaimplementować blokadę optymistyczną – nie blokujemy bazy, 
 ale przy UPDATE sprawdzamy, czy wersja wiersza się nie zmieniła. Jak się zmieniła -> rzucamy błąd i każemy użytkownikowi spróbować ponownie.
 
-Opcja 1: Blokada Optymistyczna (Optimistic Locking - @Version)
-Masz już w bazie kolumnę version. W systemach o ogromnym ruchu (np. giełda), 
-pesymistyczne FOR UPDATE potrafi "zamulić" bazę, bo blokuje wiersze fizycznie. 
-Nauczymy się, jak w SQLAlchemy aktualizować saldo bez blokowania bazy (sprawdzając wersję wiersza). 
-To ulubione pytanie na rekrutacjach na architekta.
 
 
-
-
-Opcja 3 – Integracja z Twoim Angularowym Frontendem (CORS)
-----------------------------------------------------------
-Skoro znasz Angulara, nie ma sensu budować frontu w Jinja.
-
-Dlaczego: 
-Musisz umieć podpiąć swoje API (FastAPI) pod prawdziwy, nowoczesny frontend (Angular). To jest praca, którą wykonuje każdy Fullstack codziennie: "jak połączyć backend z tym, co widzi user?".
-
-Skoro znasz Angulara, na pewno wiesz, co to błąd CORS (Cross-Origin Resource Sharing). 
-Skonfigurujemy FastAPI tak, żeby wpuszczał zapytania z Twojego lokalnego środowiska Angularowego (np. localhost:4200), 
-żebyś mógł dorobić do tego własny interfejs.
-
-Skoro na co dzień używasz Angulara, to Twój ulubiony teren. 
-Mogę rzucić Ci gotowy kod Service w TypeScript oraz prosty komponent HTML,
-żebyś odpalił ng serve i na własne oczy zobaczył, jak Twój Angular gada z Pythonowym FastAPI (CORS już mamy odblokowany!).
-
-
-
-Opcja 4 – CI/CD (GitHub Actions + Docker Hub)
----------------------------------------------
-Na koniec zrobimy profesjonalny proces wdrożeniowy.
-
-Dlaczego: Za każdym razem, gdy zrobisz git push, GitHub Actions automatycznie uruchomi Twoje testy z LAB-a 6, 
-zbuduje nowy obraz Dockerowy i wypchnie go na Docker Hub. 
-To jest standard w 2026 roku.
-
-
-
-Oto jedyna słuszna, inżynierska ścieżka dla Twojego systemu:
-------------------------------------------------------------
-Opcja 1 (Testy - Pytest): Zanim dotkniemy mechanizmów współbieżności czy podepniemy frontend, musimy mieć "siatkę bezpieczeństwa". W Javie piszesz JUnit. W Pythonie napiszemy testy, które udowodnią, że API działa.
-Opcja 2 (Optymistyczne Blokowanie): Mając testy z Opcji 1, możemy bezpiecznie "rozpruć" kod transferu i zamienić blokadę pesymistyczną (FOR UPDATE) na optymistyczną (@Version). Jeśli testy po refaktorze przejdą na zielono – wiemy, że nic nie zepsuliśmy.
-Opcja 3 (Angular): Backend jest w 100% stabilny, przetestowany i zoptymalizowany. Wystawiamy go na zewnątrz i podpinamy Twój ulubiony framework.
-Opcja 4 (CI/CD): Zamykamy projekt klamrą. Automatyzujemy budowanie Dockera i odpalanie testów przy każdym commitcie na GitHubie.
-
-
-
- 
 
 Opcja D: Współbieżność na poziomie aplikacji (Locki w Pythonie)
 Opcja E: Testy Jednostkowe i Integracyjne (pytest + Testcontainers)

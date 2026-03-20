@@ -11,7 +11,6 @@ Dlatego nasz CRUD będzie miał wbudowane reguły biznesowe.
 
 Krok 1: DTO dla aktualizacji (schemas.py)
 -----------------------------------------
-
 Nie chcemy, żeby ktoś przez endpoint PUT mógł zmienić swoje saldo na milion. 
 Pozwolimy tylko na zmianę nazwy właściciela.
 
@@ -26,7 +25,6 @@ class AccountUpdate(BaseModel):
 
 Krok 2: Endpointy R-U-D (main.py)
 ---------------------------------
-
 Masz już `POST /accounts (Create)`. Teraz dodamy brakujące klocki.
 Zwróć uwagę na to, jak w `FastAPI` zwraca się listy `list[AccountResponse]` i jak używamy asynchronicznego `db.get()`.
 
@@ -88,7 +86,6 @@ async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
 
 Inżynierskie Smaczki (FastAPI vs Spring):
 -----------------------------------------
-
 Zmienne w URL: 
 Zauważ ścieżkę `/accounts/{account_id}`. 
 W argumencie funkcji piszesz po prostu `account_id: int`. 

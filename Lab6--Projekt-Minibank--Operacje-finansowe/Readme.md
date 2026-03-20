@@ -101,7 +101,8 @@ Wypłata (Withdrawal):
 from_account_id: Twoje_ID, to_account_id: 0, amount: 200. (Kasa leci od Ciebie do systemu).
 
 Transfer: 
-from_account_id: Twoje_ID, to_account_id: Kumpla_ID, amount: 100.
+from_account_id: 
+Twoje_ID, to_account_id: Kumpla_ID, amount: 100.
 
 Krok 4: Konwersje (Opcjonalnie)
 Jeśli chcesz konwersje walut (np. PLN na USD), to jest to osobna logika "Kurs Waluty".

@@ -1,4 +1,5 @@
 import asyncio  # Dodaj to na samej górze
+import time
 
 # --- 1. Biblioteki wbudowane w Pythona (Standard Library) ---
 from contextlib import asynccontextmanager
@@ -16,7 +17,6 @@ from models import Account, TransactionHistory
 from schemas import AccountCreate, AccountResponse, TransferRequest, AccountUpdate
 
 from database import Base
-from exchange import get_exchange_rate
 
 
 # --- LIFECYCLE: Tworzenie tabel w bazie przy starcie aplikacji ---
@@ -75,8 +75,7 @@ async def create_account(
     # Tworzymy encję na podstawie DTO
     new_account = Account(
         owner_name=account_in.owner_name,
-        balance=account_in.initial_balance,
-        currency=account_in.currency.upper()  # <--- TO DODAJ (od razu robimy wielkimi literami np. "USD")
+        balance=account_in.initial_balance
     )
 
     # Zapis do bazy
@@ -206,7 +205,6 @@ class TransactionRequest(BaseModel):
     amount: Decimal
 
 
-# --- ENDPOINT: transaction - czyli operacje: dodawania, odejmowania salda z/do konta Specjalnego ------------
 @app.post("/transaction")
 async def execute_transaction(tx: TransactionRequest, db: AsyncSession = Depends(get_db)):
     # 1. Sortowanie ID (ochrona przed Deadlockiem)
@@ -239,52 +237,3 @@ async def execute_transaction(tx: TransactionRequest, db: AsyncSession = Depends
     db.add(history)
     await db.commit()
     return {"status": "success"}
-
-
-
-
-# --- ENDPOINT: convert-transfer - tranzakcje walutowe (konwersje) ------------
-@app.post("/convert-transfer")
-async def convert_and_transfer(transfer: TransferRequest, db: AsyncSession = Depends(get_db)):
-    # 1. Pobieramy konta
-    ids = sorted([transfer.from_account_id, transfer.to_account_id])
-    stmt = select(Account).where(Account.id.in_(ids)).with_for_update()
-    result = await db.execute(stmt)
-    accounts = {acc.id: acc for acc in result.scalars().all()}
-
-    from_acc = accounts[transfer.from_account_id]
-    to_acc = accounts[transfer.to_account_id]
-
-    # 2. Pobieramy kurs walut
-    try:
-        if from_acc.currency == to_acc.currency:
-            rate = 1.0  # Przelew w tej samej walucie
-        else:
-            rate = get_exchange_rate(from_acc.currency, to_acc.currency)
-    except Exception as e:
-        # Prawdziwy inżynier loguje takie rzeczy
-        print(f"CRITICAL ERROR - Błąd API walutowego: {e}")
-        raise HTTPException(status_code=502, detail=f"API walutowe niedostępne. Powód: {e}")
-
-    # 3. Obliczamy kwotę docelową
-    converted_amount = transfer.amount * Decimal(str(rate))
-
-    # 4. Atomowa transakcja
-    if from_acc.balance < transfer.amount:
-        raise HTTPException(status_code=400, detail="Brak środków")
-
-    from_acc.balance -= transfer.amount
-    to_acc.balance += converted_amount
-
-    # 5. Historia
-    history = TransactionHistory(
-        from_account_id=from_acc.id,
-        to_account_id=to_acc.id,
-        amount=transfer.amount,
-        note=f"Konwersja: {from_acc.currency} -> {to_acc.currency} (kurs: {rate})"
-    )
-    db.add(history)
-    await db.commit()
-
-    return {"status": "success", "rate_used": rate, "converted_amount": converted_amount}
-

@@ -110,7 +110,6 @@ async def transfer_money(transfer: TransferRequest, db: AsyncSession = Depends(g
 
 Krok 3: Test Bojowy (Symulacja ataku współbieżnego)
 ---------------------------------------------------
-
 Zrobimy zmasowany atak (DDoS) na Twój własny serwer. 
 Utworzymy 50 wątków, które spróbują jednocześnie przelać pieniądze z konta nr 1 na konto nr 2.
 

@@ -95,7 +95,6 @@ class AccountResponse(BaseModel):
 
 Krok 4: Integracja w kontrolerze (main.py)
 ------------------------------------------
-
 Teraz łączymy to wszystko w głównym pliku. 
 Nadpisz swój main.py:
 
@@ -147,7 +146,6 @@ async def create_account(
 
 Inżynierskie podsumowanie (Co tu się wydarzyło):
 ------------------------------------------------
-
 Depends(get_db): 
 To jest system Dependency Injection (DI) we Flasku/FastAPI. 
 Kiedy przychodzi zapytanie (`Request`), `FastAPI`:
@@ -188,7 +186,7 @@ jak podejrzeć bazę danych?
 1. Pobierz i zainstaluj `pgAdmin` (graficzny klient do Postgresa).
 2. Połącz się z bazą, używając danych z `docker-compose.yml`:
    - Host: localhost
-   - Port: 5432
+   - Port: 5433
    - Username: bank_admin
    - Password: superhaslo123  
    - Database: minibank

@@ -105,7 +105,7 @@ services:
     container_name: minibank_db
     restart: always
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: bank_admin
       POSTGRES_PASSWORD: superhaslo123
@@ -120,13 +120,14 @@ volumes:
 EGZEKUCJA (Uruchomienie systemu):
 ---------------------------------
 Masz zainstalowanego Dockera na kompie, prawda?
-Otwórz terminal w folderze projektu i wpisz komendę:
+Otwórz terminal w folderze projektu MiniBank (`cd C:\dev\python-projects\PycharmProjects\PythonProject-2\MiniBank`) 
+ i wpisz komendę:
 
 `docker-compose up --build`
 
 Co się teraz dzieje?
 --------------------
-1. Docker pobiera obraz Postgresa i podnosi bazę na porcie 5432
+1. Docker pobiera obraz Postgresa (postgres:15-alpine) i podnosi bazę na porcie 5433
 2. Buduje obraz z Twoim kodem Pythona, instaluje paczki z requirements.txt
 3. Odpala serwer Uvicorn (odpowiednik Wrapped Tomcat) na porcie 8000
 
