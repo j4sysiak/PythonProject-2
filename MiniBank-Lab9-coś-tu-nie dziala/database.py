@@ -6,6 +6,7 @@
 # Funkcja get_db() jest generatorem, który dostarcza sesję do bazy danych
 # i jest używana jako wstrzykiwanie zależności w FastAPI.
 
+
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base

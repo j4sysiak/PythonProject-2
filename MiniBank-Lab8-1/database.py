@@ -1,11 +1,4 @@
 # database.py
-# Tworzy silnik (engine) i sesję (session) do bazy danych,
-# korzystając z URL-a podanego w zmiennej środowiskowej DATABASE_URL.
-# Używamy SQLAlchemy z asyncpg dla asynchronicznej komunikacji z Postgresem.
-# Klasa Base jest bazą dla naszych modeli (tabel).
-# Funkcja get_db() jest generatorem, który dostarcza sesję do bazy danych
-# i jest używana jako wstrzykiwanie zależności w FastAPI.
-
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
