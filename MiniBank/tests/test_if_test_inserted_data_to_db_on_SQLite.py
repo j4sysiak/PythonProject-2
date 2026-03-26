@@ -27,3 +27,16 @@ except Exception as e:
     print("SELECT error:", e)
 cur.close()
 conn.close()
+
+
+
+db = r"C:\dev\python-projects\PycharmProjects\PythonProject-2\test_minibank.db"
+conn = sqlite3.connect(db)
+print("Tables:", conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
+print("Accounts rows:", conn.execute("SELECT id, owner_name, balance FROM accounts").fetchall())
+print("Transactions rows:", conn.execute("SELECT id, from_account_id, to_account_id, amount FROM transactions").fetchall()[:10])
+conn.close()
+
+
+
+

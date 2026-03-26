@@ -75,6 +75,82 @@ python -c "import os, importlib; os.environ['DATABASE_URL']='sqlite+aiosqlite://
 
 ---
 
+## Testing Optimistic Locking
+
+W repo znajdują się dwa skrypty do testowania zachowania Optimistic Locking dla operacji przelewu (`/transfer`):
+
+- `MiniBank/tests/load_test_optimistic.py` — wariant "remote": wysyła równoległe żądania HTTP do uruchomionego serwera (używa `requests`). Używaj go tylko jeśli serwer jest uruchomiony i masz pewność, że docelowa baza to środowisko testowe lub chcesz świadomie sprawdzić zachowanie w środowisku produkcyjnym.
+
+- `MiniBank/tests/load_test_optimistic_local.py` — bezpieczny wariant lokalny: uruchamia aplikację in-process (ASGI) i przed importem wymusza `DATABASE_URL` wskazujący na lokalny plik `test_minibank.db` (SQLite). Używaj tego skryptu do testów lokalnych, aby nie zapisywać danych do produkcyjnej bazy Postgres.
+
+Główne cele obu skryptów:
+- symulować dużą liczbę równoległych przelewów pomiędzy dwoma kontami,
+- zliczać odpowiedzi (200 success, 409 conflict — OCC, 400 bad request itp.),
+- pobrać końcowe salda kont i porównać z liczbą udanych przelewów.
+
+Jak uruchomić (lokalny, bezpieczny wariant)
+1. Przejdź do katalogu projektu i aktywuj virtualenv:
+
+```powershell
+Set-Location C:\dev\python-projects\PycharmProjects\PythonProject-2
+.\.venv\Scripts\Activate.ps1
+```
+
+2. Uruchom lokalny test (in-process, zapisuje do `test_minibank.db`):
+
+```powershell
+.\.venv\Scripts\python -m MiniBank.tests.load_test_optimistic_local
+```
+
+Skrypt wypisze statystyki: ile żądań zakończyło się statusem 200, ile 409 itp. Na końcu pokaże finalne salda kont — sprawdź, czy różnica sald odpowiada sumie pomyślnych transferów.
+
+Jak uruchomić (remote / zdalny serwer)
+1. Upewnij się, że aplikacja jest uruchomiona i że jej `DATABASE_URL` wskazuje środowisko, na którym chcesz testować (UWAGA: może to być produkcyjna baza!).
+2. Uruchom:
+
+```powershell
+.\.venv\Scripts\python -m MiniBank.tests.load_test_optimistic
+```
+
+Możesz też ustawić adres serwera przez zmienną środowiskową `BASE_URL` przed uruchomieniem:
+
+```powershell
+$env:BASE_URL='http://localhost:8000'
+.\.venv\Scripts\python -m MiniBank.tests.load_test_optimistic
+```
+
+Interpretacja wyników
+- `Status 200` — przelew powiódł się i został zapisany.
+- `Status 409` — konflikt optimistic locking (wersja w DB zmieniła się przed zapisem) — oczekiwane przy dużej konkurencji.
+- `Status 400` — np. niewystarczające środki.
+
+Przykład: jeśli uruchomisz 50 równoległych przelewów po 10.00 i otrzymasz 47 sukcesów (200) i 3 konflikty (409), to końcowa różnica sald powinna wynieść 47 * 10 = 470.
+
+Wskazówki tuningowe
+- Jeśli chcesz więcej sukcesów przy dużej konkurencji, zwiększ liczbę retryów (`RETRY_ON_CONFLICT`) i dodaj wykładniczy backoff z jitterem.
+- Zmniejszenie liczby równoległych wątków/spawnowanych żądań zmniejszy liczbę konfliktów.
+- Testy lokalne: używaj `load_test_optimistic_local.py` by uniknąć przypadkowych zapisów do środowiska produkcyjnego.
+
+Sprawdzanie pliku testowej bazy (po uruchomieniu lokalnego testu)
+```powershell
+.\.venv\Scripts\python MiniBank/tests/test_if_test_inserted_data_to_db_on_SQLite.py
+```
+Albo uruchom snippet poniżej aby szybko zobaczyć tabele i kilka wierszy:
+
+```python
+import sqlite3
+db = r"C:\dev\python-projects\PycharmProjects\PythonProject-2\test_minibank.db"
+conn = sqlite3.connect(db)
+print(conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
+print(conn.execute("SELECT id, owner_name, balance FROM accounts").fetchall())
+print(conn.execute("SELECT id, from_account_id, to_account_id, amount FROM transactions").fetchall()[:10])
+conn.close()
+```
+
+Bezpieczeństwo
+- Nigdy nie uruchamiaj `load_test_optimistic.py` przeciwko produkcyjnej bazy bez wcześniejszej zgody i bez świadomości konsekwencji — skrypt może tworzyć dużo rekordów.
+- Zawsze preferuj `load_test_optimistic_local.py` do szybkich walidacji i CI.
+
 
 ## Przywracanie środowiska produkcyjnego (`DATABASE_URL`)
 
