@@ -1,5 +1,6 @@
 # --- 1. Biblioteki wbudowane (Standard Library) ---
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from decimal import Decimal
 
@@ -10,10 +11,19 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # --- 3. Moduły lokalne (Twoje własne pliki) ---
-from database import AsyncSessionLocal, Base, engine, get_db
-from exchange import get_exchange_rate
-from models import Account, TransactionHistory
-from schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest
+# Importy robimy w try/except — najpierw pakietowe (używane w testach),
+# a jeśli uruchamiamy aplikację jako skrypt/moduł bez rodzica (np. w Dockerze
+# uruchamiając `uvicorn main:app`) to wracamy do importów bez prefiksu.
+try:
+    from .database import AsyncSessionLocal, Base, engine, get_db
+    from .exchange import get_exchange_rate
+    from .models import Account, TransactionHistory
+    from .schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest
+except Exception:
+    from database import AsyncSessionLocal, Base, engine, get_db
+    from exchange import get_exchange_rate
+    from models import Account, TransactionHistory
+    from schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest
 
 
 # --- LIFECYCLE: Tworzenie tabel w bazie przy starcie aplikacji ---
@@ -46,8 +56,18 @@ async def lifespan(app: FastAPI):
 
     # Tutaj możesz dodać kod zamykający (np. zamknięcie połączenia z bazą)
     # 3. CLEANUP: Kod zamykający
-    print("Zamykanie serwera, czyszczenie zasobów...")
-    await engine.dispose() # To jest kluczowe! Zamyka pulę połączeń do bazy
+    print("Zamykanie serwera, czyszczenie zasobow...")
+    # On some platforms/drivers (np. aiosqlite on Windows) disposing the engine
+    # during TestClient teardown can cause a low-level access violation. To be
+    # safe during local testing with SQLite we skip disposing the engine.
+    try:
+        db_url = os.environ.get("DATABASE_URL", "")
+        if not db_url.startswith("sqlite"):
+            await engine.dispose()
+        else:
+            print("Skipping engine.dispose() for SQLite (test run)")
+    except Exception as e:
+        print(f"Warning: error while disposing engine: {e}")
 
 # Inicjalizacja aplikacji
 app = FastAPI(title="MiniBank API", lifespan=lifespan)
