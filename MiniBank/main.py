@@ -9,6 +9,8 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+# for Optimistic Locking
+from sqlalchemy.orm.exc import StaleDataError
 
 # --- 3. Moduły lokalne (Twoje własne pliki) ---
 # Importy robimy w try/except — najpierw pakietowe (używane w testach),
@@ -48,7 +50,7 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Account).filter_by(id=0))
         if not result.scalars().first():
-            system_acc = Account(id=0, owner_name="SYSTEM", balance=999999.0)
+            system_acc = Account(id=0, owner_name="SYSTEM", balance=Decimal("999999.00"))
             session.add(system_acc)
             await session.commit()
         # Po zakończeniu bloku `async with`, sesja automatycznie się zamyka
@@ -157,7 +159,9 @@ async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
     return None  # Przy 204 No Content nie zwracamy żadnego JSON-a
 
 
-# --- ENDPOINT: transfer money ------------
+
+
+# --- ENDPOINT FINANSOWY: transfer money from/to acct:Id1 to acct:Id2 on the same acct currency ---
 @app.post("/transfer")
 async def transfer_money(transfer: TransferRequest, db: AsyncSession = Depends(get_db)):
     if transfer.from_account_id == transfer.to_account_id:
@@ -167,9 +171,9 @@ async def transfer_money(transfer: TransferRequest, db: AsyncSession = Depends(g
     account_ids = sorted([transfer.from_account_id, transfer.to_account_id])
 
     try:
-        # 2. PESSIMISTIC LOCKING: Odpowiednik @Lock(LockModeType.PESSIMISTIC_WRITE) ze Springa.
-        # W bazie Postgres wywoła to: SELECT * FROM accounts WHERE id IN (...) FOR UPDATE;
-        stmt = select(Account).where(Account.id.in_(account_ids)).with_for_update()
+        # 2. OPTIMISTIC LOCKING:
+        # Pobieramy dane (brak blokady FOR UPDATE!)
+        stmt = select(Account).where(Account.id.in_(account_ids))  # .with_for_update() --to bylo dla pesimistic locking
         result = await db.execute(stmt)
 
         # Wyciągamy konta i wrzucamy do słownika dla łatwego dostępu {id: obiekt}
@@ -194,18 +198,28 @@ async def transfer_money(transfer: TransferRequest, db: AsyncSession = Depends(g
         history = TransactionHistory(
             from_account_id=transfer.from_account_id,
             to_account_id=transfer.to_account_id,
-            amount=transfer.amount
+            amount=transfer.amount,
+            note=f"Transfer (Przelew optymistyczny): {from_account.balance} -> {to_account.balance}"
         )
         db.add(history)
 
-        # 5. Commit fizycznie zapisuje zmiany i ZWALNIA BLOKADY FOR UPDATE
-        await db.commit()
-
-        return {
-            "status": "success",
-            "from_account_balance": from_account.balance,
-            "to_account_balance": to_account.balance
-        }
+        # 4. PRÓBA ZAPISU Z OCC
+        try:
+            # SQLAlchemy wyśle do bazy: UPDATE ... WHERE id=X AND version=1
+            # Flush first to surface StaleDataError early, then commit
+            await db.flush()
+            await db.commit()
+            return {
+                "status": "success",
+                "from_account_balance": from_account.balance,
+                "to_account_balance": to_account.balance
+            }
+        except StaleDataError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Konflikt danych. Saldo konta zmieniło się w międzyczasie. Spróbuj ponownie."
+            )
 
     except HTTPException:
         # Puszczamy błędy biznesowe dalej (FastAPI samo je obsłuży)
@@ -216,6 +230,8 @@ async def transfer_money(transfer: TransferRequest, db: AsyncSession = Depends(g
         raise HTTPException(status_code=500, detail=f"Błąd wewnętrzny serwera: {str(e)}")
 
 
+
+
 # DTO dla wszystkich operacji
 class TransactionRequest(BaseModel):
     from_account_id: int
@@ -223,54 +239,80 @@ class TransactionRequest(BaseModel):
     amount: Decimal
 
 
-# --- ENDPOINT: transaction - czyli operacje: dodawania, odejmowania salda z/do konta Specjalnego ------------
+# --- ENDPOINT FINANSOWY: transaction - czyli operacje: dodawania, odejmowania salda z/do konta Specjalnego ------------
 @app.post("/transaction")
-async def execute_transaction(tx: TransactionRequest, db: AsyncSession = Depends(get_db)):
-    # 1. Sortowanie ID (ochrona przed Deadlockiem)
+# Zakładam, że TransactionRequest, Account, TransactionHistory i get_db są zdefiniowane gdzie indziej.
+async def execute_transaction(tx: 'TransactionRequest', db: AsyncSession = Depends(get_db)):
+    # 1) Sortujemy ID, żeby zapobiegać deadlockom
     ids = sorted([tx.from_account_id, tx.to_account_id])
 
-    # 2. Blokada pesymistyczna na oba konta naraz
-    stmt = select(Account).where(Account.id.in_(ids)).with_for_update()
-    result = await db.execute(stmt)
-    accounts = {acc.id: acc for acc in result.scalars().all()}
+    try:
+        # 2) OPTIMISTIC LOCKING - zwykły select (bez with_for_update)
+        stmt = select(Account).where(Account.id.in_(ids))
+        result = await db.execute(stmt)
+        accounts = {acc.id: acc for acc in result.scalars().all()}
 
-    # 3. Walidacja biznesowa
-    if tx.from_account_id not in accounts or tx.to_account_id not in accounts:
-        raise HTTPException(status_code=404, detail="Konto nie istnieje")
+        # 3) Walidacja istnienia kont oraz dostępności środków (konto 0 = SYSTEM może być na minusie)
+        if tx.from_account_id not in accounts or tx.to_account_id not in accounts:
+            raise HTTPException(status_code=404, detail="Konto nie istnieje")
 
-    from_acc = accounts[tx.from_account_id]
-    to_acc = accounts[tx.to_account_id]
+        from_acc = accounts[tx.from_account_id]
+        to_acc = accounts[tx.to_account_id]
 
-    if from_acc.balance < tx.amount and from_acc.id != 0:  # Systemowe konto (0) może mieć debet
-        raise HTTPException(status_code=400, detail="Brak środków")
+        if from_acc.balance < tx.amount and from_acc.id != 0:
+            raise HTTPException(status_code=400, detail="Brak środków")
 
-    # 4. Atomowa operacja
-    from_acc.balance -= tx.amount
-    to_acc.balance += tx.amount
+        # 4) Zmiana sald w pamięci i zapis historii
+        from_acc.balance -= tx.amount
+        to_acc.balance += tx.amount
 
-    history = TransactionHistory(
-        from_account_id=tx.from_account_id,
-        to_account_id=tx.to_account_id,
-        amount=tx.amount
-    )
-    db.add(history)
-    await db.commit()
-    return {"status": "success"}
+        history = TransactionHistory(
+            from_account_id=tx.from_account_id,
+            to_account_id=tx.to_account_id,
+            amount=tx.amount,
+            note=f"Transaction (Przelew optymistyczny): {from_acc.balance} -> {to_acc.balance})"
+        )
+        db.add(history)
+
+        # 5) Próba zapisu: jeśli wersja w bazie się zmieni (konflikt), SQLAlchemy rzuci StaleDataError
+        try:
+            await db.flush()
+            await db.commit()
+            return {"status": "success"}
+        except StaleDataError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Konflikt danych. Saldo konta zmieniło się w międzyczasie. Spróbuj ponownie."
+            )
+
+    except HTTPException:
+        # Przepuszczamy błędy biznesowe dalej
+        raise
+    except Exception as e:
+        # Inne nieoczekiwane błędy -> rollback + 500
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Błąd wewnętrzny serwera: {e}")
 
 
 
-
-# --- ENDPOINT: convert-transfer - tranzakcje walutowe (konwersje) ------------
+# --- ENDPOINT FINANSOWY: convert-transfer - tranzakcje walutowe (konwersje) ------------
 @app.post("/convert-transfer")
 async def convert_and_transfer(transfer: TransferRequest, db: AsyncSession = Depends(get_db)):
     # 1. Pobieramy konta
     ids = sorted([transfer.from_account_id, transfer.to_account_id])
-    stmt = select(Account).where(Account.id.in_(ids)).with_for_update()
+
+    # Zdejmujemy kłódkę! Zamiast with_for_update() używamy zwykłego selecta
+    stmt = select(Account).where(Account.id.in_(ids))  # .with_for_update()
+
     result = await db.execute(stmt)
     accounts = {acc.id: acc for acc in result.scalars().all()}
 
-    from_acc = accounts[transfer.from_account_id]
-    to_acc = accounts[transfer.to_account_id]
+    from_acc = accounts.get(transfer.from_account_id)
+    to_acc = accounts.get(transfer.to_account_id)
+
+    if not from_acc or not to_acc:
+        raise HTTPException(status_code=404, detail="Konto nie istnieje")
 
     # 2. Pobieramy kurs walut
     try:
@@ -279,7 +321,7 @@ async def convert_and_transfer(transfer: TransferRequest, db: AsyncSession = Dep
         else:
             rate = get_exchange_rate(from_acc.currency, to_acc.currency)
     except Exception as e:
-        # Prawdziwy inżynier loguje takie rzeczy
+        # Tu logujemy takie rzeczy
         print(f"CRITICAL ERROR - Błąd API walutowego: {e}")
         raise HTTPException(status_code=502, detail=f"API walutowe niedostępne. Powód: {e}")
 
@@ -293,15 +335,29 @@ async def convert_and_transfer(transfer: TransferRequest, db: AsyncSession = Dep
     from_acc.balance -= transfer.amount
     to_acc.balance += converted_amount
 
-    # 5. Historia
     history = TransactionHistory(
         from_account_id=from_acc.id,
         to_account_id=to_acc.id,
         amount=transfer.amount,
-        note=f"Konwersja: {from_acc.currency} -> {to_acc.currency} (kurs: {rate})"
+        note = f"Konwersja (Przelew optymistyczny): {from_acc.currency} -> {to_acc.currency} (kurs: {rate})"
     )
     db.add(history)
-    await db.commit()
 
-    return {"status": "success", "rate_used": rate, "converted_amount": converted_amount}
+    # 5. KLUCZOWY MOMENT: Próba zapisu
+    try:
+        # Tu SQLAlchemy wysyła zapytanie:
+        # UPDATE accounts SET balance=..., version=2 WHERE id=1 AND version=1
+        await db.flush()
+        await db.commit()
+    except StaleDataError:
+        # Jeśli inny proces w międzyczasie zmienił wersję, wpadamy tutaj!
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Konflikt danych (Race Condition). Saldo konta zostało zmienione w innej transakcji. Spróbuj ponownie."
+        )
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
+    return {"status": "success"}

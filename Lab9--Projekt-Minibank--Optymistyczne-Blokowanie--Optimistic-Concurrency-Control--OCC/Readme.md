@@ -1,8 +1,8 @@
-Lab9-1-coś-tu-nie-dziala
+Lab9
 ----
 
-Lab9-1-coś-tu-nie-dziala------Projekt-Minibank--Optymistyczne-Blokowanie--Optimistic-Concurrency-Control--OCC
--------------------------------------------------------------------------------------------------------------
+Lab9--Projekt-Minibank--Optymistyczne-Blokowanie--Optimistic-Concurrency-Control--OCC
+--------------------------------------------------------- ---------------------------
 
 Wchodzimy w tryb High-Concurrency Finance.
 Blokada pesymistyczna (FOR UPDATE) to "kłódka" na wierszu w bazie – jak jeden wątek czyta, drugi musi czekać.
@@ -82,7 +82,7 @@ pod kątem usunięcia `.with_for_update()` i dodania obsługi `StaleDataError`:
 # Dodaj w sekcji importów na górze main.py:
 from sqlalchemy.orm.exc import StaleDataError
 
-# ... (zmodyfikowane wszystkie edpointy finansowe: transfer, transaction and convert-transfer) ...
+# ... (zmodyfikowane wszystkie Endpointy finansowe: transfer, transaction and convert-transfer) ...
 ```
 
 

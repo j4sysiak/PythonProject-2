@@ -1,7 +1,7 @@
 # models.py
 from decimal import Decimal
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import String, Numeric, Integer
+from sqlalchemy import String, Numeric, Integer, DateTime
 
 try:
     from .database import Base
@@ -47,5 +47,5 @@ class TransactionHistory(Base):
     # DODAJEMY TĘ KOLUMNĘ do obsługi konwersji walutowych:
     note: Mapped[str] = mapped_column(String(200), nullable=True)
 
-    # Use timezone-aware UTC timestamps
-    timestamp: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    # Use timezone-aware UTC timestamps (TIMESTAMP WITH TIME ZONE in Postgres)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

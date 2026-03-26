@@ -14,6 +14,12 @@ Remove-Item Env:\DATABASE_URL -ErrorAction SilentlyContinue
 pytest MiniBank/tests/test_api.py -q
 ```
 
+Albo jeden wiersz (PowerShell) — dokładnie ten fragment, który możesz wkleić i uruchomić:
+
+```powershell
+$ Set-Location C:\dev\python-projects\PycharmProjects\PythonProject-2; Remove-Item Env:\DATABASE_URL -ErrorAction SilentlyContinue; pytest MiniBank/tests/test_api.py -q
+```
+
 ### Kroki bezpiecznego przygotowania
 1. Aktywuj virtualenv:
 
