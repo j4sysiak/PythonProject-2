@@ -19,12 +19,20 @@ time="2026-03-20T09:48:36+01:00" level=warning msg="C:\\dev\\python-projects\\Py
  ✔ Network minibank_default  Removed0.4s  
  ✔ Volume minibank_pgdata    Removed0.1s  
 ```
-Wpisz: docker-compose up --build
+Wpisz: docker-compose build --no-cache api
+Odpal> docker-compose up
+
+```log
+[+] Building 0.0s (0/0) 
+[+] Running 2/2 
+ ✔ Container minibank_db  Started 0.3s 
+ ✔ Container minibank_api Started 0.4s 
+```
 
 
 baza Postgres zostanie zrestartowana, a wszystkie dane w niej zostaną usunięte (w tym konta i transakcje).
 Jeśli chcesz zachować dane, możesz pominąć krok `docker-compose down -v` 
-i po prostu uruchomić `docker-compose up --build`, 
+i po prostu uruchomić `docker-compose build --no-cache api` i odpal: `docker-compose up`, 
 ale wtedy nie będzie efektu "restartu" bazy, a jedynie ponowne zbudowanie obrazu API.
 
 1. Odpalamy klienta (Swagger) i sprawdzamy, że baza jest pusta (nie ma kont, transakcji itp.): http://localhost:8000/docs

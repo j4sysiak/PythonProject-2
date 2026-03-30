@@ -12,6 +12,8 @@ asyncpg
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
+# KLUCZOWA POPRAWKA do Bezpieczeństwo i JWT:
+bcrypt==3.2.0
 
 # --- Testowanie (z Labów 6/7) ---
 pytest
