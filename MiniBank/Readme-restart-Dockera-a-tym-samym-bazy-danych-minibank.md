@@ -30,6 +30,7 @@ Odpal> docker-compose up
 ```
 
 
+
 baza Postgres zostanie zrestartowana, a wszystkie dane w niej zostaną usunięte (w tym konta i transakcje).
 Jeśli chcesz zachować dane, możesz pominąć krok `docker-compose down -v` 
 i po prostu uruchomić `docker-compose build --no-cache api` i odpal: `docker-compose up`, 
