@@ -29,13 +29,3 @@ class TransferRequest(BaseModel):
 class AccountUpdate(BaseModel):
     owner_name: str = Field(..., min_length=2, max_length=100, description="Nowe imię i nazwisko właściciela")
 
-class UserCreate(BaseModel):
-    username: str
-    password: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    username: str | None = None

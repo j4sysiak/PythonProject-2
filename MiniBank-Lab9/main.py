@@ -12,11 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # for Optimistic Locking
 from sqlalchemy.orm.exc import StaleDataError
 
-# --- NOWOŚĆ: Bezpieczeństwo i JWT ---
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from auth import verify_password, create_access_token, hash_password, SECRET_KEY, ALGORITHM
-from jose import jwt, JWTError
-
 # --- 3. Moduły lokalne (Twoje własne pliki) ---
 # Importy robimy w try/except — najpierw pakietowe (używane w testach),
 # a jeśli uruchamiamy aplikację jako skrypt/moduł bez rodzica (np. w Dockerze
@@ -24,30 +19,27 @@ from jose import jwt, JWTError
 try:
     from .database import AsyncSessionLocal, Base, engine, get_db
     from .exchange import get_exchange_rate
-    from .models import Account, TransactionHistory, User
-    from .schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest, Token, UserCreate, TokenData
-except ImportError:
+    from .models import Account, TransactionHistory
+    from .schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest
+except Exception:
     from database import AsyncSessionLocal, Base, engine, get_db
     from exchange import get_exchange_rate
-    from models import Account, TransactionHistory, User
-    from schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest, Token, UserCreate, TokenData
-
-
+    from models import Account, TransactionHistory
+    from schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest
 
 
 # --- LIFECYCLE: Tworzenie tabel w bazie przy starcie aplikacji ---
 # W produkcji używa się migracji (Alembic/Flyway), ale do labów wystarczy to:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Czekamy aż baza wstanie (retry logic) - SETUP: Inicjalizacja bazy
+    # Czekamy aż baza wstanie (retry logic)
     max_retries = 5
     for i in range(max_retries):
         try:
             # 1. Tworzymy tabele w bazie
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            break
-            # Jeśli się udało, wychodzimy z pętli
+            break  # Jeśli się udało, wychodzimy z pętli
             # Po zakończeniu bloku `async with`, sesja automatycznie się zamyka
         except Exception as e:
             if i == max_retries - 1: raise e
@@ -58,31 +50,9 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as session:
         result = await session.execute(select(Account).filter_by(id=0))
         if not result.scalars().first():
-            # A. Najpierw sprawdźmy czy jest User systemowy
-            result_user = await session.execute(select(User).filter_by(username="SYSTEM_USER"))
-            system_user = result_user.scalars().first()
-            if not system_user:
-                system_user = User(
-                    username="SYSTEM_USER",
-                    hashed_password="not_a_real_password_system_only"
-                )
-                session.add(system_user)
-                await session.flush()  # flush() nada ID użytkownikowi, ale nie zamknie transakcji
-                print("User systemowy utworzony.")
-
-            # B. Teraz sprawdźmy czy jest Konto systemowe (ID 0)
-            result_acc = await session.execute(select(Account).filter_by(id=0))
-            if not result_acc.scalars().first():
-                system_acc = Account(
-                    id=0,
-                    owner_name="SYSTEM",
-                    balance=999999.0,
-                    owner_id=system_user.id  # <--- TO NAPRAWIA TWÓJ BŁĄD
-                )
-                session.add(system_acc)
-                await session.commit()
-                print("Konto systemowe utworzone i przypisane do Usera.")
-
+            system_acc = Account(id=0, owner_name="SYSTEM", balance=Decimal("999999.00"))
+            session.add(system_acc)
+            await session.commit()
         # Po zakończeniu bloku `async with`, sesja automatycznie się zamyka
     yield  # Tu aplikacja działa
 
@@ -103,33 +73,6 @@ async def lifespan(app: FastAPI):
 
 # Inicjalizacja aplikacji
 app = FastAPI(title="MiniBank API", lifespan=lifespan)
-
-
-
-# --------------------------- Bezpieczeństwo i JWT ---------------------------
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-# Tworzymy funkcję `get_current_user`, która będzie wstrzykiwana do każdego chronionego endpointu
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Nie można zweryfikować uprawnień",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    result = await db.execute(select(User).where(User.username == username))
-    user = result.scalars().first()
-    if user is None:
-        raise credentials_exception
-    return user
-
 
 
 
@@ -216,22 +159,6 @@ async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
     return None  # Przy 204 No Content nie zwracamy żadnego JSON-a
 
 
-# --- ENDPOINT: rejestracja użytkownika (POST /register) ---
-@app.post("/register", status_code=201)
-async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
-    # 1. Sprawdzamy czy user już istnieje
-    result = await db.execute(select(User).where(User.username == user_in.username))
-    if result.scalars().first():
-        raise HTTPException(status_code=400, detail="Użytkownik już istnieje")
-
-    # 2. Tworzymy nowego usera z hashowanym hasłem
-    new_user = User(
-        username=user_in.username,
-        hashed_password=hash_password(user_in.password)
-    )
-    db.add(new_user)
-    await db.commit()
-    return {"message": "Użytkownik zarejestrowany pomyślnie"}
 
 
 # --- ENDPOINT FINANSOWY: transfer money from/to acct:Id1 to acct:Id2 on the same acct currency ---
@@ -434,28 +361,3 @@ async def convert_and_transfer(transfer: TransferRequest, db: AsyncSession = Dep
         raise HTTPException(status_code=500, detail=str(e))
 
     return {"status": "success"}
-
-
-# --------------------------- Bezpieczeństwo i JWT ---------------------------
-
-# 1. Logowanie (Wymiana hasła na Token)
-@app.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.username == form_data.username))
-    user = result.scalars().first()
-
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Niepoprawny login lub hasło")
-
-    access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-
-# 2. CHRONIONY ENDPOINT: Moje konta
-@app.get("/accounts/me", response_model=list[AccountResponse])
-async def get_my_accounts(current_user: User = Depends(get_current_user)):
-    # Dzięki Depends(get_current_user) wiemy na 100%, że user jest zalogowany
-    # i mamy dostęp do jego całego obiektu!
-    return current_user.accounts
-
-

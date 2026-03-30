@@ -1,0 +1,77 @@
+@echo off
+REM Get path to this batch file
+for %%i in (%0) do (
+  set SCRIPT_DIR=%%~dpi
+  set BASE_NAME=%%~ni
+)
+set SCROPT_DIR=%SCRIPT_DIR:~0,-1%
+echo SCRIPT_DIR: %SCRIPT_DIR%
+for /F "tokens=1,2,4 delims=\"  %%i in ("%SCRIPT_DIR%") do (
+  echo %%i\%%j\%%k> %SCRIPT_DIR%\tmp.txt
+)
+set /P LOG_DIR=<%SCRIPT_DIR%\tmp.txt
+del /F %SCRIPT_DIR%\tmp.txt
+if not exist %LOG_DIR% (
+  echo mkdir %LOG_DIR%
+  mkdir %LOG_DIR%
+)
+echo LOG_DIR: %LOG_DIR%
+set LOG_FILE=%LOG_DIR%\%BASE_NAME%.log
+echo LOG_FILE: %LOG_FILE%
+if exist %LOG_FILE% (
+  echo del /F %LOG_FILE%
+  del /F %LOG_FILE%
+  echo del /F %LOG_FILE%>> %LOG_FILE% 2>&1
+)
+echo SCRIPT_DIR: %SCRIPT_DIR%>> %LOG_FILE% 2>&1
+echo LOG_DIR: %LOG_DIR%>> %LOG_FILE% 2>&1
+echo LOG_FILE: %LOG_FILE%>> %LOG_FILE% 2>&1
+for %%i in (%SCRIPT_DIR%) do (
+  set CONF_DIR=%%~dpi
+)
+set CONF_DIR=%CONF_DIR:~0,-1%\Configurations
+echo CONF_DIR=%CONF_DIR%
+echo CONF_DIR: %CONF_DIR%>> %LOG_FILE% 2>&1
+echo DUPA
+
+
+
+set "PY_CMD="
+set "PY_ARGS="
+echo DUPA2
+echo Searching for Python interpreter...>> %LOG_FILE% 2>&1
+if exist "C:\Program Files\Python311\python.exe" (
+  set "PY_CMD=C:\Program Files\Python311\python.exe"
+)
+echo PY_CMD after first check: %PY_CMD%>> %LOG_FILE% 2>&1
+if not defined PY_CMD if exist "C:\Python311\python.exe" (
+  set "PY_CMD=C:\Python311\python.exe"
+)
+echo PY_CMD after second check: %PY_CMD%>> %LOG_FILE% 2>&1
+if not defined PY_CMD if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+  set "PY_CMD=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+)
+echo PY_CMD after third check: %PY_CMD%>> %LOG_FILE% 2>&1
+if not defined PY_CMD (
+  where py >nul 2>&1
+  if %ERRORLEVEL%==0 (
+    set "PY_CMD=py"
+    set "PY_ARGS=-3"
+  ) else (
+    where python >nul 2>&1
+    if %ERRORLEVEL%==0 (
+      set "PY_CMD=python"
+      set "PY_ARGS="
+    )
+  )
+)
+echo PY_CMD after PATH check: %PY_CMD%>> %LOG_FILE% 2>&1
+if not defined PY_CMD (
+  echo No Python interpreter found in common locations or PATH. Using `py` launcher fallback.>> %LOG_FILE% 2>&1
+  set "PY_CMD=py"
+  set "PY_ARGS=-3"
+)
+echo Final Python command: %PY_CMD% %PY_ARGS%>> %LOG_FILE% 2>&1
+
+
+  exit /B %RETURN_VALUE%

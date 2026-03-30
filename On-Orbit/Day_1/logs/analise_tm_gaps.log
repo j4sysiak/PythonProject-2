@@ -1,0 +1,7 @@
+del /F "C:\dev\python-projects\PycharmProjects\PythonProject-2\On-Orbit\Day_1\logs\analise_tm_gaps.log"
+SCRIPT_DIR: C:\dev\python-projects\PycharmProjects\PythonProject-2\On-Orbit\Day_1\
+LOG_DIR: C:\dev\python-projects\PycharmProjects\PythonProject-2\On-Orbit\Day_1\logs
+LOG_FILE: C:\dev\python-projects\PycharmProjects\PythonProject-2\On-Orbit\Day_1\logs\analise_tm_gaps.log
+CONF_DIR: C:\dev\python-projects\PycharmProjects\PythonProject-2\On-Orbit\Day_1\Configurations
+Using Python interpreter: "C:\dev\python-projects\PycharmProjects\PythonProject-2\.venv\Scripts\python.exe" 
+No configuration file found for "C:\dev\python-projects\PycharmProjects\PythonProject-2\On-Orbit\Day_1\Configurations"

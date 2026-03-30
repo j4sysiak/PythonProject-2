@@ -1,9 +1,19 @@
+# --- Podstawa API ---
 fastapi
 uvicorn[standard]
-sqlalchemy
-asyncpg
 pydantic
 requests
+
+# --- Baza danych (Async) ---
+sqlalchemy
+asyncpg
+
+# --- Bezpieczeństwo i JWT ---
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+
+# --- Testowanie (z Labów 6/7) ---
 pytest
 pytest-asyncio
 httpx

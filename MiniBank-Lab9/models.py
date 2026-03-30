@@ -1,28 +1,16 @@
 # models.py
 from decimal import Decimal
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import String, Numeric, Integer, DateTime
 
-from sqlalchemy import String, Numeric, Integer, DateTime, ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-# Twoja klasa bazowa z database.py
 try:
     from .database import Base
-except ImportError:
+except Exception:
     from database import Base
 
 from datetime import datetime, timezone
 
 
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(200))
-
-    # RELACJA: Jeden user ma wiele kont
-    # "Account" w cudzysłowie, żeby uniknąć błędu kołowego importu
-    accounts: Mapped[list["Account"]] = relationship("Account", back_populates="owner")
 
 
 class Account(Base):
@@ -42,12 +30,7 @@ class Account(Base):
         "version_id_col": version # SQLAlchemy będzie pilnować tego pola!
     }
 
-    # KLUCZ OBCY: Łączymy z id w tabeli users
-    # Dopuszczamy NULL, bo chcemy mieć konto systemowe (SYSTEM) bez przypisanego ownera
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=True)
 
-    # RELACJA ODWROTNA: Dostęp do obiektu User z poziomu Konta
-    owner: Mapped["User"] = relationship("User", back_populates="accounts")
 
 
 class TransactionHistory(Base):

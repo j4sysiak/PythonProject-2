@@ -1,0 +1,89 @@
+@echo off
+REM Get path to this batch file
+for %%i in (%0) do (
+  set SCRIPT_DIR=%%~dpi
+  set BASE_NAME=%%~ni
+)
+echo BASE_NAME: %BASE_NAME%
+echo BASE_NAME: %BASE_NAME%>> %BASE_NAME% 2>&1
+
+set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
+echo SCRIPT_DIR: %SCRIPT_DIR%
+for /F "tokens=1,2,4 delims=\" %%i in ("%SCRIPT_DIR%") do (
+  echo %%i\%%j\Logs\%%k> %SCRIPT_DIR%\tmp.txt
+)
+set /P LOG_DIR=<%SCRIPT_DIR%\tmp.txt
+del /F %SCRIPT_DIR%\tmp.txt
+if not exist %LOG_DIR% (
+  echo mkdir %LOG_DIR%
+  mkdir %LOG_DIR%
+)
+echo LOG_DIR: %LOG_DIR%
+set LOGFILE=%LOG_DIR%\%BASE_NAME%.log
+echo LOGFILE: %LOGFILE%
+if exist %LOGFILE% (
+  echo del /F %LOGFILE%
+  del /F %LOGFILE%
+  echo del /F %LOGFILE%>> %LOGFILE% 2>&1
+)
+echo SCRIPT_DIR: %SCRIPT_DIR%>> %LOGFILE% 2>&1
+echo LOG_DIR: %LOG_DIR%>> %LOGFILE% 2>&1
+echo LOGFILE: %LOGFILE%>> %LOGFILE% 2>&1
+for %%i in (%SCRIPT_DIR%) do (
+  set CONF_DIR=%%~dpi
+)
+set CONF_DIR=%CONF_DIR:~0,-1%\Configurations
+echo CONF_DIR=%CONF_DIR%
+echo CONF_DIR: %CONF_DIR%>> %LOGFILE% 2>&1
+
+REM --- BEGIN: Bezpieczne wykrywanie interpretera Python ---
+REM Preferujemy python.exe z venv\.venv\Scripts
+set "VENV_SCRIPTS=C:\dev\python-projects\PycharmProjects\PythonProject-2\.venv\Scripts"
+set "PYTHON_EXE=%VENV_SCRIPTS%\python.exe"
+
+if exist "%PYTHON_EXE%" (
+  set "PYTHON=%PYTHON_EXE%"
+) else (
+  REM Spróbuj znaleźć python w PATH
+  for /f "usebackq tokens=*" %%p in (`where python 2^>nul`) do (
+    set "PYTHON=%%p"
+    goto :found_python
+  )
+
+  REM Spróbuj użyć launchera py
+  for /f "usebackq tokens=*" %%p in (`py -3 -c "import sys;print(sys.executable)" 2^>nul`) do (
+    set "PYTHON=%%p"
+    goto :found_python
+  )
+
+  REM Fallback na standardową instalację
+  set "PYTHON=C:\Program Files\Python311\python.exe"
+)
+:found_python
+
+echo Using Python interpreter: "%PYTHON%"
+echo Using Python interpreter: "%PYTHON%" >> "%LOGFILE%" 2>&1
+REM --- END: Bezpieczne wykrywanie interpretera Python ---
+
+
+
+setlocal ENABLEDELAYEDEXPANSION
+set /A RETURN_VALUE=0
+if exist %CONF_DIR%\%BASE_NAME%.cfg (
+  for %%f in (%CONF_DIR%\%BASE_NAME%.cfg) do (
+    echo "%PYTHON%" %SCRIPT_DIR%\%BASE_NAME%.py %%f
+    echo "%PYTHON%" %SCRIPT_DIR%\%BASE_NAME%.py %%f>> "%LOGFILE%" 2>&1
+    "%PYTHON%" %SCRIPT_DIR%\%BASE_NAME%.py %%f>> "%LOGFILE%" 2>&1
+    set /A RETURN_VALUE=!RETURN_VALUE!+!ERRORLEVEL!
+    echo RETURN_VALUE: !RETURN_VALUE!
+    echo RETURN_VALUE: !RETURN_VALUE!>> "%LOGFILE%" 2>&1
+  )
+) else (
+  echo No configuration file found for "%CONF_DIR%"!
+  echo No configuration file found for "%CONF_DIR%"!>> "%LOGFILE%" 2>&1
+  set /A RETURN_VALUE=-1
+)
+setlocal DISABLEDELAYEDEXPANSION
+
+
+exit /B %RETURN_VALUE%
