@@ -1,16 +1,461 @@
-# This is a sample Python script.
+# --- 1. Biblioteki wbudowane (Standard Library) ---
+import asyncio
+import os
+from contextlib import asynccontextmanager
+from decimal import Decimal
 
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
+# --- 2. Biblioteki zewnętrzne (Third-party) ---
+from fastapi import Depends, FastAPI, HTTPException, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+# for Optimistic Locking
+from sqlalchemy.orm.exc import StaleDataError
+
+# --- NOWOŚĆ: Bezpieczeństwo i JWT ---
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from auth import verify_password, create_access_token, hash_password, SECRET_KEY, ALGORITHM
+from jose import jwt, JWTError
+
+# --- 3. Moduły lokalne (Twoje własne pliki) ---
+# Importy robimy w try/except — najpierw pakietowe (używane w testach),
+# a jeśli uruchamiamy aplikację jako skrypt/moduł bez rodzica (np. w Dockerze
+# uruchamiając `uvicorn main:app`) to wracamy do importów bez prefiksu.
+try:
+    from .database import AsyncSessionLocal, Base, engine, get_db
+    from .exchange import get_exchange_rate
+    from .models import Account, TransactionHistory, User
+    from .schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest, Token, UserCreate, TokenData
+except ImportError:
+    from database import AsyncSessionLocal, Base, engine, get_db
+    from exchange import get_exchange_rate
+    from models import Account, TransactionHistory, User
+    from schemas import AccountCreate, AccountResponse, AccountUpdate, TransferRequest, Token, UserCreate, TokenData
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+# --- LIFECYCLE: Tworzenie tabel w bazie przy starcie aplikacji ---
+# W produkcji używa się migracji (Alembic/Flyway), ale do labów wystarczy to:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Czekamy aż baza wstanie (retry logic) - SETUP: Inicjalizacja bazy
+    max_retries = 5
+    for i in range(max_retries):
+        try:
+            # 1. Tworzymy tabele w bazie
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            break
+            # Jeśli się udało, wychodzimy z pętli
+            # Po zakończeniu bloku `async with`, sesja automatycznie się zamyka
+        except Exception as e:
+            if i == max_retries - 1: raise e
+            print(f"Baza danych jeszcze niegotowa, próba {i + 1}...")
+            await asyncio.sleep(5)  # Czekamy 5 sekund i próbujemy znowu
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    # 2. Tworzymy konto systemowe (ID 0), jeśli nie istnieje
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Account).filter_by(id=0))
+        if not result.scalars().first():
+            # A. Najpierw sprawdźmy czy jest User systemowy
+            result_user = await session.execute(select(User).filter_by(username="SYSTEM_USER"))
+            system_user = result_user.scalars().first()
+            if not system_user:
+                system_user = User(
+                    username="SYSTEM_USER",
+                    hashed_password="not_a_real_password_system_only"
+                )
+                session.add(system_user)
+                await session.flush()  # flush() nada ID użytkownikowi, ale nie zamknie transakcji
+                print("User systemowy utworzony.")
+
+            # B. Teraz sprawdźmy czy jest Konto systemowe (ID 0)
+            result_acc = await session.execute(select(Account).filter_by(id=0))
+            if not result_acc.scalars().first():
+                system_acc = Account(
+                    id=0,
+                    owner_name="SYSTEM",
+                    balance=999999.0,
+                    owner_id=system_user.id  # <--- TO NAPRAWIA TWÓJ BŁĄD
+                )
+                session.add(system_acc)
+                await session.commit()
+                print("Konto systemowe utworzone i przypisane do Usera.")
+
+        # Po zakończeniu bloku `async with`, sesja automatycznie się zamyka
+    yield  # Tu aplikacja działa
+
+    # Tutaj możesz dodać kod zamykający (np. zamknięcie połączenia z bazą)
+    # 3. CLEANUP: Kod zamykający
+    print("Zamykanie serwera, czyszczenie zasobow...")
+    # On some platforms/drivers (np. aiosqlite on Windows) disposing the engine
+    # during TestClient teardown can cause a low-level access violation. To be
+    # safe during local testing with SQLite we skip disposing the engine.
+    try:
+        db_url = os.environ.get("DATABASE_URL", "")
+        if not db_url.startswith("sqlite"):
+            await engine.dispose()
+        else:
+            print("Skipping engine.dispose() for SQLite (test run)")
+    except Exception as e:
+        print(f"Warning: error while disposing engine: {e}")
+
+# Inicjalizacja aplikacji
+app = FastAPI(title="MiniBank API", lifespan=lifespan)
+
+
+
+# --------------------------- Bezpieczeństwo i JWT ---------------------------
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Tworzymy funkcję `get_current_user`, która będzie wstrzykiwana do każdego chronionego endpointu
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Nie można zweryfikować uprawnień",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalars().first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+
+
+
+# ------------------------------ ENDPOINTY -----------------------------------------
+
+# --- ENDPOINT: Check health ---
+@app.get("/health")
+async def health_check():
+    return {"status": "UP"}
+
+
+# --- ENDPOINT: Utworzenie konta ---
+# response_model mówi Swaggerowi, jakiego formatu JSON-a ma się spodziewać
+@app.post("/accounts", response_model=AccountResponse, status_code=201)
+async def create_account(
+        account_in: AccountCreate,  # Springowe @RequestBody
+        db: AsyncSession = Depends(get_db)  # Springowe @Autowired (Wstrzykiwanie sesji bazy)
+):
+    # Tworzymy encję na podstawie DTO
+    new_account = Account(
+        owner_name=account_in.owner_name,
+        balance=account_in.initial_balance,
+        currency=account_in.currency.upper()  # <--- TO DODAJ (od razu robimy wielkimi literami np. "USD")
+    )
+
+    # Zapis do bazy
+    db.add(new_account)
+    await db.commit()
+    await db.refresh(new_account)  # Odświeżamy, żeby uzyskać nadane przez bazę ID
+
+    return new_account
+
+
+# --- ENDPOINT: READ: Pobierz wszystkie konta ---
+@app.get("/accounts", response_model=list[AccountResponse])
+async def get_all_accounts(db: AsyncSession = Depends(get_db)):
+    # Wykonujemy zapytanie SELECT * FROM accounts
+    result = await db.execute(select(Account))
+    # scalars().all() wyciąga czyste obiekty Pythona z wyniku zapytania SQL
+    return result.scalars().all()
+
+
+# --- ENDPOINT: READ: Pobierz jedno konkretne konto ---
+@app.get("/accounts/{account_id}", response_model=AccountResponse)
+async def get_account(account_id: int, db: AsyncSession = Depends(get_db)):
+    account = await db.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Konto o podanym ID nie istnieje")
+    return account
+
+
+# --- ENDPOINT: UPDATE: Aktualizacja danych konta (tylko nazwa właściciela) ---
+@app.put("/accounts/{account_id}", response_model=AccountResponse)
+async def update_account(account_id: int, account_in: AccountUpdate, db: AsyncSession = Depends(get_db)):
+    account = await db.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Konto o podanym ID nie istnieje")
+
+    # Aktualizujemy tylko dozwolone pola
+    account.owner_name = account_in.owner_name
+
+    await db.commit()
+    await db.refresh(account)
+    return account
+
+
+# --- ENDPOINT: DELETE: Zamknięcie konta ---
+# Używamy statusu 204 (No Content) - standard REST dla udanego usunięcia
+@app.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
+    account = await db.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Konto o podanym ID nie istnieje")
+
+    # REGUŁA BIZNESOWA: Nie można usunąć konta, jeśli są na nim środki
+    if account.balance > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nie można zamknąć konta. Wypłać najpierw środki. Aktualne saldo: {account.balance}"
+        )
+
+    await db.delete(account)
+    await db.commit()
+    return None  # Przy 204 No Content nie zwracamy żadnego JSON-a
+
+
+# --- ENDPOINT: rejestracja użytkownika (POST /register) ---
+@app.post("/register", status_code=201)
+async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
+    # 1. Sprawdzamy czy user już istnieje
+    result = await db.execute(select(User).where(User.username == user_in.username))
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail="Użytkownik już istnieje")
+
+    # 2. Tworzymy nowego usera z hashowanym hasłem
+    new_user = User(
+        username=user_in.username,
+        hashed_password=hash_password(user_in.password)
+    )
+    db.add(new_user)
+    await db.commit()
+    return {"message": "Użytkownik zarejestrowany pomyślnie"}
+
+
+# --- ENDPOINT FINANSOWY: transfer money from/to acct:Id1 to acct:Id2 on the same acct currency ---
+@app.post("/transfer")
+async def transfer_money(transfer: TransferRequest, db: AsyncSession = Depends(get_db)):
+    if transfer.from_account_id == transfer.to_account_id:
+        raise HTTPException(status_code=400, detail="Nie można przelać na to samo konto")
+
+    # 1. Zabezpieczenie przed Deadlockiem: Sortujemy ID, żeby zawsze blokować wiersze w tej samej kolejności
+    account_ids = sorted([transfer.from_account_id, transfer.to_account_id])
+
+    try:
+        # 2. OPTIMISTIC LOCKING:
+        # Pobieramy dane (brak blokady FOR UPDATE!)
+        stmt = select(Account).where(Account.id.in_(account_ids))  # .with_for_update() --to bylo dla pesimistic locking
+        result = await db.execute(stmt)
+
+        # Wyciągamy konta i wrzucamy do słownika dla łatwego dostępu {id: obiekt}
+        accounts = {acc.id: acc for acc in result.scalars().all()}
+
+        # Walidacja istnienia kont
+        if transfer.from_account_id not in accounts or transfer.to_account_id not in accounts:
+            raise HTTPException(status_code=404, detail="Jedno z kont nie istnieje")
+
+        from_account = accounts[transfer.from_account_id]
+        to_account = accounts[transfer.to_account_id]
+
+        # 3. Walidacja biznesowa
+        if from_account.balance < transfer.amount:
+            raise HTTPException(status_code=400, detail="Niewystarczające środki (Insufficient funds)")
+
+        # 4. Operacja na danych (w pamięci)
+        from_account.balance -= transfer.amount
+        to_account.balance += transfer.amount
+
+        # Zapis historii
+        history = TransactionHistory(
+            from_account_id=transfer.from_account_id,
+            to_account_id=transfer.to_account_id,
+            amount=transfer.amount,
+            note=f"Transfer (Przelew optymistyczny): {from_account.balance} -> {to_account.balance}"
+        )
+        db.add(history)
+
+        # 4. PRÓBA ZAPISU Z OCC
+        try:
+            # SQLAlchemy wyśle do bazy: UPDATE ... WHERE id=X AND version=1
+            # Flush first to surface StaleDataError early, then commit
+            await db.flush()
+            await db.commit()
+            return {
+                "status": "success",
+                "from_account_balance": from_account.balance,
+                "to_account_balance": to_account.balance
+            }
+        except StaleDataError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Konflikt danych. Saldo konta zmieniło się w międzyczasie. Spróbuj ponownie."
+            )
+
+    except HTTPException:
+        # Puszczamy błędy biznesowe dalej (FastAPI samo je obsłuży)
+        raise
+    except Exception as e:
+        # W razie jakiegokolwiek innego błędu (np. awaria sieci), wycofujemy transakcję
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Błąd wewnętrzny serwera: {str(e)}")
+
+
+
+
+# DTO dla wszystkich operacji
+class TransactionRequest(BaseModel):
+    from_account_id: int
+    to_account_id: int
+    amount: Decimal
+
+
+# --- ENDPOINT FINANSOWY: transaction - czyli operacje: dodawania, odejmowania salda z/do konta Specjalnego ------------
+@app.post("/transaction")
+# Zakładam, że TransactionRequest, Account, TransactionHistory i get_db są zdefiniowane gdzie indziej.
+async def execute_transaction(tx: 'TransactionRequest', db: AsyncSession = Depends(get_db)):
+    # 1) Sortujemy ID, żeby zapobiegać deadlockom
+    ids = sorted([tx.from_account_id, tx.to_account_id])
+
+    try:
+        # 2) OPTIMISTIC LOCKING - zwykły select (bez with_for_update)
+        stmt = select(Account).where(Account.id.in_(ids))
+        result = await db.execute(stmt)
+        accounts = {acc.id: acc for acc in result.scalars().all()}
+
+        # 3) Walidacja istnienia kont oraz dostępności środków (konto 0 = SYSTEM może być na minusie)
+        if tx.from_account_id not in accounts or tx.to_account_id not in accounts:
+            raise HTTPException(status_code=404, detail="Konto nie istnieje")
+
+        from_acc = accounts[tx.from_account_id]
+        to_acc = accounts[tx.to_account_id]
+
+        if from_acc.balance < tx.amount and from_acc.id != 0:
+            raise HTTPException(status_code=400, detail="Brak środków")
+
+        # 4) Zmiana sald w pamięci i zapis historii
+        from_acc.balance -= tx.amount
+        to_acc.balance += tx.amount
+
+        history = TransactionHistory(
+            from_account_id=tx.from_account_id,
+            to_account_id=tx.to_account_id,
+            amount=tx.amount,
+            note=f"Transaction (Przelew optymistyczny): {from_acc.balance} -> {to_acc.balance})"
+        )
+        db.add(history)
+
+        # 5) Próba zapisu: jeśli wersja w bazie się zmieni (konflikt), SQLAlchemy rzuci StaleDataError
+        try:
+            await db.flush()
+            await db.commit()
+            return {"status": "success"}
+        except StaleDataError:
+            await db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Konflikt danych. Saldo konta zmieniło się w międzyczasie. Spróbuj ponownie."
+            )
+
+    except HTTPException:
+        # Przepuszczamy błędy biznesowe dalej
+        raise
+    except Exception as e:
+        # Inne nieoczekiwane błędy -> rollback + 500
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Błąd wewnętrzny serwera: {e}")
+
+
+
+# --- ENDPOINT FINANSOWY: convert-transfer - tranzakcje walutowe (konwersje) ------------
+@app.post("/convert-transfer")
+async def convert_and_transfer(transfer: TransferRequest, db: AsyncSession = Depends(get_db)):
+    # 1. Pobieramy konta
+    ids = sorted([transfer.from_account_id, transfer.to_account_id])
+
+    # Zdejmujemy kłódkę! Zamiast with_for_update() używamy zwykłego selecta
+    stmt = select(Account).where(Account.id.in_(ids))  # .with_for_update()
+
+    result = await db.execute(stmt)
+    accounts = {acc.id: acc for acc in result.scalars().all()}
+
+    from_acc = accounts.get(transfer.from_account_id)
+    to_acc = accounts.get(transfer.to_account_id)
+
+    if not from_acc or not to_acc:
+        raise HTTPException(status_code=404, detail="Konto nie istnieje")
+
+    # 2. Pobieramy kurs walut
+    try:
+        if from_acc.currency == to_acc.currency:
+            rate = 1.0  # Przelew w tej samej walucie
+        else:
+            rate = get_exchange_rate(from_acc.currency, to_acc.currency)
+    except Exception as e:
+        # Tu logujemy takie rzeczy
+        print(f"CRITICAL ERROR - Błąd API walutowego: {e}")
+        raise HTTPException(status_code=502, detail=f"API walutowe niedostępne. Powód: {e}")
+
+    # 3. Obliczamy kwotę docelową
+    converted_amount = transfer.amount * Decimal(str(rate))
+
+    # 4. Atomowa transakcja
+    if from_acc.balance < transfer.amount:
+        raise HTTPException(status_code=400, detail="Brak środków")
+
+    from_acc.balance -= transfer.amount
+    to_acc.balance += converted_amount
+
+    history = TransactionHistory(
+        from_account_id=from_acc.id,
+        to_account_id=to_acc.id,
+        amount=transfer.amount,
+        note = f"Konwersja (Przelew optymistyczny): {from_acc.currency} -> {to_acc.currency} (kurs: {rate})"
+    )
+    db.add(history)
+
+    # 5. KLUCZOWY MOMENT: Próba zapisu
+    try:
+        # Tu SQLAlchemy wysyła zapytanie:
+        # UPDATE accounts SET balance=..., version=2 WHERE id=1 AND version=1
+        await db.flush()
+        await db.commit()
+    except StaleDataError:
+        # Jeśli inny proces w międzyczasie zmienił wersję, wpadamy tutaj!
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Konflikt danych (Race Condition). Saldo konta zostało zmienione w innej transakcji. Spróbuj ponownie."
+        )
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"status": "success"}
+
+
+# --------------------------- Bezpieczeństwo i JWT ---------------------------
+
+# 1. Logowanie (Wymiana hasła na Token)
+@app.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(User).where(User.username == form_data.username))
+    user = result.scalars().first()
+
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Niepoprawny login lub hasło")
+
+    access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+# 2. CHRONIONY ENDPOINT: Moje konta
+@app.get("/accounts/me", response_model=list[AccountResponse])
+async def get_my_accounts(current_user: User = Depends(get_current_user)):
+    # Dzięki Depends(get_current_user) wiemy na 100%, że user jest zalogowany
+    # i mamy dostęp do jego całego obiektu!
+    return current_user.accounts
+
+
