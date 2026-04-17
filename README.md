@@ -4,7 +4,9 @@ Ten plik zawiera instrukcje jak bezpiecznie uruchamiać testy lokalne w projekci
 
 ## Uruchamianie testów lokalnych (Windows PowerShell)
 
-Testy integracyjne w katalogu `MiniBank/tests/` używają lokalnej bazy SQLite `test_minibank.db`. Aby uruchomić pojedynczy plik testowy bez ryzyka łączenia się z produkcyjną bazą Postgres (np. uruchomioną w Dockerze), uruchom w PowerShell:
+Testy integracyjne w katalogu `MiniBank/tests/` używają lokalnej bazy SQLite `test_minibank.db`. 
+Aby uruchomić pojedynczy plik testowy bez ryzyka łączenia się z produkcyjną bazą Postgres (np. uruchomioną w Dockerze), 
+uruchom w PowerShell:
 
 ```powershell
 Set-Location C:\dev\python-projects\PycharmProjects\PythonProject-2

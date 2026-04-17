@@ -110,6 +110,11 @@ app = FastAPI(title="MiniBank API", lifespan=lifespan)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # Tworzymy funkcję `get_current_user`, która będzie wstrzykiwana do każdego chronionego endpointu
+# get_current_user robi kolejno:
+# Wyciąga token JWT z nagłówka Authorization: Bearer <token> (dzięki oauth2_scheme)
+# Dekoduje token i odczytuje username z pola "sub"
+# Szuka użytkownika w bazie danych
+# Jeśli token jest nieprawidłowy lub użytkownik nie istnieje → zwraca 401 Unauthorized
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -120,14 +125,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
-            raise credentials_exception
+            raise credentials_exception # <--- WAŻNE
     except JWTError:
-        raise credentials_exception
+        raise credentials_exception # <--- WAŻNE
 
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalars().first()
     if user is None:
-        raise credentials_exception
+        raise credentials_exception # <--- WAŻNE
     return user
 
 
@@ -141,26 +146,52 @@ async def health_check():
     return {"status": "UP"}
 
 
+
+# 2. CHRONIONY ENDPOINT: Moje konta
+@app.get("/accounts/me", response_model=list[AccountResponse])
+async def get_my_accounts(
+        db: AsyncSession = Depends(get_db),
+        # Dzięki Depends(get_current_user) wiemy na 100%, że user jest zalogowany
+        # i mamy dostęp do jego całego obiektu!
+        current_user: User = Depends(get_current_user)
+):
+    # JAWNE ZAPYTANIE: Wyciągamy konta, gdzie owner_id zgadza się z ID zalogowanego usera
+    # To zapytanie jest asynchroniczne i bezpieczne.
+    stmt = select(Account).where(Account.owner_id == current_user.id)
+    result = await db.execute(stmt)
+
+    # scalars().all() zamienia wynik bazy na listę obiektów Account
+    accounts = result.scalars().all()
+    return accounts
+
+
+
 # --- ENDPOINT: Utworzenie konta ---
 # response_model mówi Swaggerowi, jakiego formatu JSON-a ma się spodziewać
 @app.post("/accounts", response_model=AccountResponse, status_code=201)
 async def create_account(
         account_in: AccountCreate,  # Springowe @RequestBody
-        db: AsyncSession = Depends(get_db)  # Springowe @Autowired (Wstrzykiwanie sesji bazy)
+        db: AsyncSession = Depends(get_db),  # Springowe @Autowired (Wstrzykiwanie sesji bazy)
+        # `get_current_user` będzie wstrzykiwana do każdego chronionego endpointu
+        # FastAPI automatycznie wywołuje funkcję get_current_user przed wykonaniem endpointu.
+        # i jeśli wszystko się powiedzie, zmienna current_user zawiera obiekt zalogowanego użytkownika (model User z bazy).
+        current_user: User = Depends(get_current_user)  # <-- JWT). Tu mamy wstrzykiwanie zależności (Dependency Injection) w FastAPI, które wymusza autoryzację JWT.
 ):
     # Tworzymy encję na podstawie DTO
     new_account = Account(
         owner_name=account_in.owner_name,
         balance=account_in.initial_balance,
-        currency=account_in.currency.upper()  # <--- TO DODAJ (od razu robimy wielkimi literami np. "USD")
+        currency=account_in.currency.upper(),
+        owner_id=current_user.id  # <--- (JWT) Musisz przekazać ID zalogowanego użytkownika do nowej encji Account
     )
 
     # Zapis do bazy
     db.add(new_account)
     await db.commit()
     await db.refresh(new_account)  # Odświeżamy, żeby uzyskać nadane przez bazę ID
-
     return new_account
+
+
 
 
 # --- ENDPOINT: READ: Pobierz wszystkie konta ---
@@ -172,6 +203,8 @@ async def get_all_accounts(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
+
+
 # --- ENDPOINT: READ: Pobierz jedno konkretne konto ---
 @app.get("/accounts/{account_id}", response_model=AccountResponse)
 async def get_account(account_id: int, db: AsyncSession = Depends(get_db)):
@@ -179,6 +212,8 @@ async def get_account(account_id: int, db: AsyncSession = Depends(get_db)):
     if not account:
         raise HTTPException(status_code=404, detail="Konto o podanym ID nie istnieje")
     return account
+
+
 
 
 # --- ENDPOINT: UPDATE: Aktualizacja danych konta (tylko nazwa właściciela) ---
@@ -194,6 +229,8 @@ async def update_account(account_id: int, account_in: AccountUpdate, db: AsyncSe
     await db.commit()
     await db.refresh(account)
     return account
+
+
 
 
 # --- ENDPOINT: DELETE: Zamknięcie konta ---
@@ -216,6 +253,8 @@ async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
     return None  # Przy 204 No Content nie zwracamy żadnego JSON-a
 
 
+
+
 # --- ENDPOINT: rejestracja użytkownika (POST /register) ---
 @app.post("/register", status_code=201)
 async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
@@ -232,6 +271,8 @@ async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db))
     db.add(new_user)
     await db.commit()
     return {"message": "Użytkownik zarejestrowany pomyślnie"}
+
+
 
 
 # --- ENDPOINT FINANSOWY: transfer money from/to acct:Id1 to acct:Id2 on the same acct currency ---
@@ -310,6 +351,9 @@ class TransactionRequest(BaseModel):
     from_account_id: int
     to_account_id: int
     amount: Decimal
+
+
+
 
 
 # --- ENDPOINT FINANSOWY: transaction - czyli operacje: dodawania, odejmowania salda z/do konta Specjalnego ------------
@@ -451,11 +495,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-# 2. CHRONIONY ENDPOINT: Moje konta
-@app.get("/accounts/me", response_model=list[AccountResponse])
-async def get_my_accounts(current_user: User = Depends(get_current_user)):
-    # Dzięki Depends(get_current_user) wiemy na 100%, że user jest zalogowany
-    # i mamy dostęp do jego całego obiektu!
-    return current_user.accounts
+
 
 

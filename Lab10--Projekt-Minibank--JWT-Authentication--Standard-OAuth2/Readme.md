@@ -258,6 +258,7 @@ Krok 6: Dodaj endpoint `/register` w `main.py`:
 Wklej to pod importami, obok innych tras. 
 To pozwoli Ci stworzyć dowolnego użytkownika i od razu sprawdzić, czy zapisuje się w bazie.
 
+
 ```python
 from schemas import UserCreate # upewnij się, że masz ten import!
 from auth import hash_password
@@ -297,16 +298,17 @@ Jeśli chroniony – dodajesz.
 Zadanie dla Ciebie:
 -------------------
 Zrób restart bazy bo dodaliśmy relację owner_id:
+cd do folderu projektu MiniBank (`cd C:\dev\python-projects\PycharmProjects\PythonProject-2\MiniBank`)
 1. Zatrzymaj wszystko: Ctrl+C.
-2. Wyczyść wolumeny: docker-compose down -v.
-3. Uruchom ponownie: docker-compose up --build.
+2. Wyczyść wolumeny: `  docker-compose down -v  `
+3. Uruchom ponownie: `  docker-compose up --build  `
 
 Teraz jak teraz skutecznie zamknąć kłódkę?
 Odśwież http://localhost:8000/docs.
 Otwórz endpoint POST `/register` (nie potrzebuje kłódki).
 Zarejestruj się: {"username": "jacek", "password": "test"}.
 Teraz kliknij Authorize na górze strony.
-Wpisz: jacek i test.
+Wpisz: username: `jacek` i  haslo: `test`.
 Kliknij Authorize.
 Teraz musi zadziałać. 
 Kłódka się zamknie.

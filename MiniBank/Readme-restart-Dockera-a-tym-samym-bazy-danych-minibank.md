@@ -30,7 +30,7 @@ Odpal> docker-compose up
 ```
 
 
-baza Postgres zostanie zrestartowana, a wszystkie dane w niej zostaną usunięte (w tym konta i transakcje).
+Baza Postgres zostanie zrestartowana, a wszystkie dane w niej zostaną usunięte (w tym konta i transakcje).
 Jeśli chcesz zachować dane, możesz pominąć krok `docker-compose down -v` 
 i po prostu uruchomić `docker-compose build --no-cache api` i odpal: `docker-compose up`, 
 ale wtedy nie będzie efektu "restartu" bazy, a jedynie ponowne zbudowanie obrazu API.
@@ -39,3 +39,34 @@ ale wtedy nie będzie efektu "restartu" bazy, a jedynie ponowne zbudowanie obraz
 
 2. Odpalamy klienta bazy (PostgreSQL lub SQLite) i sprawdzamy, że tabela `accounts` jest pusta (SELECT * FROM accounts;).
    plik bazy danych dla SQLite znajduje się w folderze projektu (np. `C:\dev\python-projects\PycharmProjects\PythonProject-2\MiniBank\minibank.db`).
+
+
+Utowrzenie usera do generowania tokenu JWT:
+-------------------------------------------
+1. sposób
+```bash
+curl -X POST "http://localhost:8000/users/" -H "Content-Type: application/json" -d "{\"username\": \"admin\", \"password\": \"superhaslo123\"}"
+```
+
+2. Najszybsza metoda: Zarejestruj się od nowa
+Jeśli nie masz nic na twardo w kodzie, baza po restarcie jest pusta. Nie musisz niczego pamiętać.
+W Swaggerze rozwiń endpoint POST /register.
+Kliknij Try it out.
+Wpisz dowolne dane, których teraz nie zapomnisz, np.:
+code
+JSON
+{
+  "username": "jacek",
+  "password": "haslo123"
+}
+Kliknij Execute. 
+Jeśli dostaniesz status 201, to Twoje nowe konto już żyje.
+Teraz kliknij ten duży przycisk Authorize na górze i wpisz te same dane: jacek / haslo123.
+
+3. Sprawdź bezpośrednio w bazie (Inżynierski podgląd)
+Jeśli chcesz zobaczyć, jakie loginy już siedzą w tabeli:
+Otwórz DB Browser for SQLite (lub podepnij się pod Postgresa w Dockerze).
+Otwórz plik bazy.
+Wejdź w zakładkę Browse Data i wybierz tabelę users.
+Zobaczysz kolumnę username. Hasła nie odczytasz (bo jest zahashowane), ale login będziesz znał.
+Moja rada: Jeśli kłódka w Swaggerze nie puszcza Cię na admin / haslo123, to po prostu zrób POST /register. To trwa 5 sekund i masz pewność, że dane są świeże.
